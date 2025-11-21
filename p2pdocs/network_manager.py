@@ -6,6 +6,7 @@ Handles peer communication, document distribution, and real-time sync
 import threading
 import json
 import logging
+import socket
 from typing import Dict, Callable, Optional, List
 from pathlib import Path
 from .network.discovery import DiscoveryManager, PeerInfo
@@ -16,19 +17,38 @@ from .storage import StorageManager
 
 logger = logging.getLogger(__name__)
 
+# Global lock to ensure only one NetworkManager per user
+_network_managers = {}
+
 
 class NetworkManager:
     """Manages network operations and P2P communication"""
     
+    _instances = {}  # Singleton per username
+    _lock = threading.Lock()
+    
+    def __new__(cls, username: str, tcp_port: int = 5000, config_dir: str = None):
+        """Ensure only one NetworkManager per username (singleton pattern)"""
+        with cls._lock:
+            if username not in cls._instances:
+                instance = super().__new__(cls)
+                cls._instances[username] = instance
+            return cls._instances[username]
+    
     def __init__(self, username: str, tcp_port: int = 5000, config_dir: str = None):
         """
-        Initialize network manager
+        Initialize network manager (only once per username)
         
         Args:
             username: Current user's username
             tcp_port: TCP port for server
             config_dir: Configuration directory
         """
+        # Only initialize once
+        if hasattr(self, '_initialized'):
+            return
+        self._initialized = True
+        
         self.username = username
         self.tcp_port = tcp_port
         self.config_dir = config_dir or str(Path.home() / ".p2pdocs")

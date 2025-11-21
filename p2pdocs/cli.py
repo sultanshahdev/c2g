@@ -8,10 +8,18 @@ import sys
 import json
 import time
 import threading
+import logging
 from pathlib import Path
 from .auth import AuthManager
 from .storage import StorageManager
 from .network_manager import NetworkManager
+
+# Disable verbose logging from network components
+logging.getLogger("p2pdocs.network").setLevel(logging.WARNING)
+logging.getLogger("p2pdocs.network_manager").setLevel(logging.WARNING)
+logging.getLogger("p2pdocs.network.server").setLevel(logging.WARNING)
+logging.getLogger("p2pdocs.network.discovery").setLevel(logging.WARNING)
+logging.getLogger("p2pdocs.network.client").setLevel(logging.WARNING)
 
 
 class P2PDocsCLI:
@@ -24,7 +32,12 @@ class P2PDocsCLI:
         self.storage = StorageManager(self.config_dir)
         self.session_file = Path(self.config_dir) / "session.json"
         self.current_user = self._load_session()
-        self.network_manager = None  # Initialized on login
+        self.network_manager = None  # Will be initialized if user is logged in
+        
+        # Auto-initialize network if user is logged in
+        if self.current_user:
+            self.network_manager = NetworkManager(self.current_user, config_dir=self.config_dir)
+            self.network_manager.start()
     
     def _load_session(self):
         """Load current user from session file"""
@@ -169,10 +182,15 @@ class P2PDocsCLI:
     
     def cmd_users(self, args):
         """List users on the LAN (discovered peers)"""
-        if not self.network_manager:
-            print("[FAIL] Please login first to discover LAN users")
+        if not self.current_user:
+            print("[FAIL] Please login first")
             return False
         
+        if not self.network_manager:
+            print("[FAIL] Network manager failed to initialize")
+            return False
+        
+        # Give discovery a moment to find peers
         discovered_peers = self.network_manager.get_discovered_peers()
         connected_peers = self.network_manager.get_connected_peers()
         connected_names = {p.username for p in connected_peers}
@@ -183,9 +201,54 @@ class P2PDocsCLI:
                 status = "CONNECTED" if peer.username in connected_names else "DISCOVERED"
                 print(f"  {i}. {peer.username} ({peer.host}:{peer.port}) - {status}")
         else:
-            print("[INFO] No other users discovered on LAN yet (waiting for announcements...)")
+            print("[INFO] No other users discovered on LAN yet")
+            print("[INFO] Waiting for peer announcements (happens every 5 seconds)...")
             print("[INFO] Make sure other users are logged in on the same network")
         
+        return True
+    
+    def cmd_daemon_start(self, args):
+        """Start the background network daemon"""
+        from .daemon import P2PDocsDaemon
+        
+        daemon = P2PDocsDaemon(self.config_dir)
+        
+        if daemon.is_running():
+            print("[INFO] Daemon is already running")
+            return True
+        
+        current_user = self._load_session()
+        if not current_user:
+            print("[FAIL] No user logged in. Run 'p2pdocs login <username> <password>' first")
+            return False
+        
+        print(f"[OK] Starting P2PDocs daemon for user '{current_user}'...")
+        try:
+            daemon.start()
+            return daemon.running
+        except Exception as e:
+            print(f"[FAIL] Failed to start daemon: {e}")
+            return False
+    
+    def cmd_daemon_stop(self, args):
+        """Stop the background network daemon"""
+        from .daemon import P2PDocsDaemon
+        
+        daemon = P2PDocsDaemon(self.config_dir)
+        
+        if not daemon.is_running():
+            print("[INFO] Daemon is not running")
+            return True
+        
+        daemon.stop()
+        return True
+    
+    def cmd_daemon_status(self, args):
+        """Check the daemon status"""
+        from .daemon import P2PDocsDaemon
+        
+        daemon = P2PDocsDaemon(self.config_dir)
+        daemon.status()
         return True
     
     def run(self, argv=None):
@@ -237,6 +300,19 @@ class P2PDocsCLI:
         # List users command
         users_parser = subparsers.add_parser("users", help="List registered users")
         users_parser.set_defaults(func=self.cmd_users)
+        
+        # Daemon commands
+        daemon_parser = subparsers.add_parser("daemon", help="Manage background network daemon")
+        daemon_subparsers = daemon_parser.add_subparsers(dest="daemon_command")
+        
+        daemon_start = daemon_subparsers.add_parser("start", help="Start the network daemon")
+        daemon_start.set_defaults(func=self.cmd_daemon_start)
+        
+        daemon_stop = daemon_subparsers.add_parser("stop", help="Stop the network daemon")
+        daemon_stop.set_defaults(func=self.cmd_daemon_stop)
+        
+        daemon_status = daemon_subparsers.add_parser("status", help="Check daemon status")
+        daemon_status.set_defaults(func=self.cmd_daemon_status)
         
         args = parser.parse_args(argv)
         
