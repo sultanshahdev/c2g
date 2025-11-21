@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p2pdocs"
+version = "1.0.0"
+description = "A Peer-to-Peer Collaborative Document Editing System with Real-Time Synchronization"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "P2PDocs Team", email = "support@p2pdocs.io"},
+]
+keywords = [
+    "p2p",
+    "peer-to-peer",
+    "collaborative",
+    "document-editor",
+    "real-time",
+    "synchronization",
+    "networking",
+    "distributed",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Communications :: File Sharing",
+    "Topic :: Office/Business",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Natural Language :: English",
+]
+
+[project.urls]
+Homepage = "https://github.com/p2pdocs/p2pdocs"
+Documentation = "https://github.com/p2pdocs/p2pdocs#readme"
+Repository = "https://github.com/p2pdocs/p2pdocs"
+"Bug Tracker" = "https://github.com/p2pdocs/p2pdocs/issues"
+
+[project.scripts]
+p2pdocs = "p2pdocs.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "black>=22.0",
+    "flake8>=4.0",
+    "mypy>=0.950",
+]
+
+[tool.setuptools]
+packages = ["p2pdocs", "p2pdocs.network"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
