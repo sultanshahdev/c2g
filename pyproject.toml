@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "p2pdocs"
-version = "1.0.2"
+version = "1.0.3"
 description = "A Peer-to-Peer Collaborative Document Editing System with Real-Time Synchronization"
 readme = "README.md"
 requires-python = ">=3.8"

@@ -4,7 +4,7 @@ Phase 4: Tkinter GUI
 """
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, simpledialog
 import threading
 from typing import Optional, Callable
 import logging
@@ -34,6 +34,10 @@ class P2PDocsEditor:
         self.on_document_open = on_document_open
         self.on_document_save = on_document_save
         self.on_keystroke = on_keystroke
+        
+        # Import storage manager for P2PDocs integration
+        from .storage import StorageManager
+        self.storage = StorageManager()
         
         self.root = tk.Tk()
         self.root.title(f"P2PDocs - {username}")
@@ -172,56 +176,83 @@ class P2PDocsEditor:
         self.update_status("New document created")
     
     def _open_document(self):
-        """Open a document"""
-        filename = filedialog.askopenfilename(
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        """Open a P2PDocs document"""
+        # Get list of available documents
+        docs = self.storage.list_documents()
+        if not docs:
+            messagebox.showinfo("Info", "No documents available")
+            return
+        
+        # Create a simple dialog to select document
+        dialog = tk.simpledialog.askstring(
+            "Open Document", 
+            f"Available documents:\n{', '.join(docs)}\n\nEnter document name:"
         )
-        if filename:
-            try:
-                with open(filename, 'r') as f:
-                    content = f.read()
-                
+        
+        if dialog:
+            doc_name = dialog.strip()
+            success, content = self.storage.read_document(doc_name)
+            if success:
                 self.text_area.delete("1.0", tk.END)
                 self.text_area.insert("1.0", content)
-                self.current_document = filename
-                self.doc_label.config(text=filename.split("/")[-1])
-                self.update_status(f"Opened: {filename}")
+                self.current_document = doc_name
+                self.doc_label.config(text=doc_name)
+                self.root.title(f"P2PDocs - {self.username} - {doc_name}")
+                self.add_recent_document(doc_name)
+                self.update_status(f"Opened: {doc_name}")
                 
                 if self.on_document_open:
-                    self.on_document_open(filename)
-            
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to open file: {str(e)}")
+                    self.on_document_open(doc_name)
+            else:
+                messagebox.showerror("Error", f"Failed to open document: {content}")
     
     def _save_document(self):
-        """Save the current document"""
+        """Save the current document to P2PDocs storage"""
         if not self.current_document:
             self._save_as_document()
             return
         
         try:
             content = self.text_area.get("1.0", tk.END)
-            with open(self.current_document, 'w') as f:
-                f.write(content)
             
-            self.update_status(f"Saved: {self.current_document}")
+            # Save to P2PDocs storage
+            success, message = self.storage.update_document(self.current_document, content)
             
-            if self.on_document_save:
-                self.on_document_save(self.current_document, content)
+            if success:
+                self.update_status(f"Saved: {self.current_document}")
+                
+                if self.on_document_save:
+                    self.on_document_save(self.current_document, content)
+            else:
+                messagebox.showerror("Error", f"Failed to save: {message}")
         
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+            messagebox.showerror("Error", f"Failed to save document: {str(e)}")
     
     def _save_as_document(self):
-        """Save document with new name"""
-        filename = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
-        )
-        if filename:
-            self.current_document = filename
-            self.doc_label.config(text=filename.split("/")[-1])
-            self._save_document()
+        """Save document with new name to P2PDocs storage"""
+        # Ask for document name instead of file path
+        dialog = tk.simpledialog.askstring("Save As", "Enter document name:")
+        if dialog:
+            doc_name = dialog.strip()
+            if not doc_name:
+                messagebox.showwarning("Warning", "Document name cannot be empty")
+                return
+            
+            try:
+                content = self.text_area.get("1.0", tk.END)
+                success, message = self.storage.create_document(doc_name, self.username, content)
+                
+                if success:
+                    self.current_document = doc_name
+                    self.doc_label.config(text=doc_name)
+                    self.root.title(f"P2PDocs - {self.username} - {doc_name}")
+                    self.update_status(f"Saved: {doc_name}")
+                    self.add_recent_document(doc_name)
+                else:
+                    messagebox.showerror("Error", f"Failed to save: {message}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save document: {str(e)}")
     
     def _undo(self):
         """Undo last action"""

@@ -324,7 +324,7 @@ Contributions welcome! Please:
 - **Supported Python**: 3.8+
 - **Platforms**: Windows, macOS, Linux
 - **Concurrent Users**: 4+ (design supports more)
-- **Current Version**: 1.0.2
+- **Current Version**: 1.0.3
 
 ## Support
 
