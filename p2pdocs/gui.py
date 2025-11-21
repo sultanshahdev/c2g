@@ -18,7 +18,8 @@ class P2PDocsEditor:
     def __init__(self, username: str, document_name: Optional[str] = None,
                  on_document_open: Optional[Callable] = None,
                  on_document_save: Optional[Callable] = None,
-                 on_keystroke: Optional[Callable] = None):
+                 on_keystroke: Optional[Callable] = None,
+                 network_manager = None):
         """
         Initialize the GUI
         
@@ -28,12 +29,14 @@ class P2PDocsEditor:
             on_document_open: Callback when document is opened
             on_document_save: Callback when document is saved
             on_keystroke: Callback when keystroke occurs
+            network_manager: Optional NetworkManager for real-time sync
         """
         self.username = username
         self.document_name_to_open = document_name
         self.on_document_open = on_document_open
         self.on_document_save = on_document_save
         self.on_keystroke = on_keystroke
+        self.network_manager = network_manager
         
         # Import storage manager for P2PDocs integration
         from .storage import StorageManager
@@ -45,6 +48,7 @@ class P2PDocsEditor:
         
         self.current_document = None
         self.current_peers = []
+        self.auto_sync_enabled = True  # Auto-sync changes to network
         
         self._create_menu_bar()
         self._create_toolbar()
@@ -207,7 +211,7 @@ class P2PDocsEditor:
                 messagebox.showerror("Error", f"Failed to open document: {content}")
     
     def _save_document(self):
-        """Save the current document to P2PDocs storage"""
+        """Save the current document to P2PDocs storage and broadcast to peers"""
         if not self.current_document:
             self._save_as_document()
             return
@@ -220,6 +224,13 @@ class P2PDocsEditor:
             
             if success:
                 self.update_status(f"Saved: {self.current_document}")
+                
+                # Broadcast to network peers if connected
+                if self.network_manager and self.auto_sync_enabled:
+                    self.network_manager.broadcast_document_update(
+                        self.current_document,
+                        content
+                    )
                 
                 if self.on_document_save:
                     self.on_document_save(self.current_document, content)

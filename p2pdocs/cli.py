@@ -1,27 +1,30 @@
 """
 CLI Module - Streamlined command-line interface for P2PDocs
-Removed redundant commands: read, open, update, create
-Kept core functionality: register, login, new, edit, view, delete, list, users
+Integrated with P2P network for multi-user collaboration
 """
 
 import argparse
 import sys
 import json
+import time
+import threading
 from pathlib import Path
 from .auth import AuthManager
 from .storage import StorageManager
+from .network_manager import NetworkManager
 
 
 class P2PDocsCLI:
     """Command-line interface for P2PDocs"""
     
     def __init__(self, config_dir: str = None):
-        """Initialize CLI with AuthManager and StorageManager"""
+        """Initialize CLI with AuthManager, StorageManager, and NetworkManager"""
         self.config_dir = config_dir or str(Path.home() / ".p2pdocs")
         self.auth = AuthManager(self.config_dir)
         self.storage = StorageManager(self.config_dir)
         self.session_file = Path(self.config_dir) / "session.json"
         self.current_user = self._load_session()
+        self.network_manager = None  # Initialized on login
     
     def _load_session(self):
         """Load current user from session file"""
@@ -60,7 +63,13 @@ class P2PDocsCLI:
         if success:
             self.current_user = args.username
             self._save_session(args.username)
+            
+            # Initialize and start network manager
+            self.network_manager = NetworkManager(args.username, config_dir=self.config_dir)
+            self.network_manager.start()
+            
             print(f"[OK] {message}")
+            print(f"[INFO] Network discovery started - discovering peers on LAN...")
         else:
             print(f"[FAIL] {message}")
         return success
@@ -78,6 +87,14 @@ class P2PDocsCLI:
         )
         if success:
             print(f"[OK] {message}")
+            
+            # Broadcast document to peers
+            if self.network_manager:
+                self.network_manager.broadcast_document_created(
+                    args.name,
+                    args.content or ""
+                )
+                print(f"[INFO] Document broadcasted to LAN peers")
         else:
             print(f"[FAIL] {message}")
         return success
@@ -95,7 +112,7 @@ class P2PDocsCLI:
         return success
     
     def cmd_edit_doc(self, args):
-        """Handle document editing in GUI editor"""
+        """Handle document editing in GUI editor with network sync"""
         if not self.current_user:
             print("[FAIL] Please login first")
             return False
@@ -113,9 +130,11 @@ class P2PDocsCLI:
             else:
                 print(f"[OK] Launching GUI editor for user '{self.current_user}'...")
             
+            # Pass network manager to GUI for real-time sync
             editor = P2PDocsEditor(
                 self.current_user,
-                document_name=args.name if args.name else None
+                document_name=args.name if args.name else None,
+                network_manager=self.network_manager
             )
             editor.run()
             return True
@@ -149,14 +168,24 @@ class P2PDocsCLI:
         return True
     
     def cmd_users(self, args):
-        """List all registered users"""
-        users = self.auth.get_all_users()
-        if users:
-            print("[OK] Registered users:")
-            for i, user in enumerate(users, 1):
-                print(f"  {i}. {user}")
+        """List users on the LAN (discovered peers)"""
+        if not self.network_manager:
+            print("[FAIL] Please login first to discover LAN users")
+            return False
+        
+        discovered_peers = self.network_manager.get_discovered_peers()
+        connected_peers = self.network_manager.get_connected_peers()
+        connected_names = {p.username for p in connected_peers}
+        
+        if discovered_peers:
+            print("[OK] Users on LAN:")
+            for i, peer in enumerate(discovered_peers, 1):
+                status = "CONNECTED" if peer.username in connected_names else "DISCOVERED"
+                print(f"  {i}. {peer.username} ({peer.host}:{peer.port}) - {status}")
         else:
-            print("[OK] No users registered")
+            print("[INFO] No other users discovered on LAN yet (waiting for announcements...)")
+            print("[INFO] Make sure other users are logged in on the same network")
+        
         return True
     
     def run(self, argv=None):

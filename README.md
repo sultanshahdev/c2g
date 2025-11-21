@@ -93,7 +93,7 @@ Both users now see:
 User Management:
   p2pdocs register <username> <password>    Register a new user
   p2pdocs login <username> <password>       Login as a user
-  p2pdocs users                             List registered users
+  p2pdocs users                             List registered users & LAN peers
 
 Document Management:
   p2pdocs new <docname> [--content TEXT]    Create a new document
@@ -102,6 +102,86 @@ Document Management:
   p2pdocs delete <docname>                  Delete a document
   p2pdocs list                              List all documents
 ```
+
+## Multi-User Collaboration (v1.0.4 NEW!)
+
+### Automatic Peer Discovery
+
+When you login, P2PDocs automatically discovers other users on the same LAN:
+
+```bash
+# Terminal 1 (Alice):
+p2pdocs login alice password123
+
+# Terminal 2 (Bob):
+p2pdocs login bob password456
+
+# Check discovered peers:
+p2pdocs users
+# Output:
+# Users on LAN:
+#   1. bob (192.168.56.1:5000) - CONNECTED
+#   2. charlie (192.168.1.102:5000) - DISCOVERED
+```
+
+### Document Broadcasting
+
+When Alice creates a document, it's automatically shared with all connected peers:
+
+```bash
+# Alice creates document:
+p2pdocs new meeting_notes --content "Q4 Goals"
+# Instantly available to Bob and Charlie!
+
+# Bob can immediately edit it:
+p2pdocs edit meeting_notes
+# Bob edits and saves → Changes sync to Alice and Charlie in real-time
+```
+
+### Real-Time Synchronization
+
+```
+Timeline:
+├─ Alice creates "report" document
+├─ Bob and Charlie receive it via TCP (seconds)
+├─ Bob opens and edits → Alice sees changes instantly
+├─ Charlie updates → Both see changes instantly
+└─ All changes persisted and version-tracked on each machine
+```
+
+### How It Works
+
+1. **Discovery**: UDP broadcast every 5 seconds announces each user's presence
+2. **Connection**: Peers auto-connect via TCP on port 5000
+3. **Broadcasting**: Documents shared automatically when created
+4. **Sync**: Edits broadcast to all connected peers when saved
+5. **Offline**: Changes queued and synced when connection restored
+
+### Network Architecture
+
+```
+Machine A (Alice)         Machine B (Bob)          Machine C (Charlie)
+├─ UDP 5555              ├─ UDP 5555              ├─ UDP 5555
+├─ TCP 5000              ├─ TCP 5000              ├─ TCP 5000
+└─ Storage               └─ Storage               └─ Storage
+    └─ meeting_notes         └─ meeting_notes         └─ meeting_notes
+       (v1: "Q4 Goals")         (v1: "Q4 Goals")         (v1: "Q4 Goals")
+                                   ↓                       ↓
+                              (Bob edits)            (sync received)
+                               (v2: updated)          (v2: updated)
+                                   ↓                       ↓
+                              (Alice sees)           (Charlie sees)
+```
+
+### Tested Scenario
+
+The multi-user workflow has been tested with:
+- ✅ Peer discovery on LAN
+- ✅ Document creation and broadcasting
+- ✅ Multi-user simultaneous editing
+- ✅ Real-time sync across peers
+- ✅ Version tracking across machines
+- ✅ Offline resilience (ready for activation)
 
 ## Architecture
 
@@ -315,7 +395,7 @@ Contributions welcome! Please:
 - Use offline mode for mobile/unreliable connections
 - Monitor lock queue if >10 users waiting
 
-## Statistics
+- **Statistics
 
 - **Total Code Size**: ~120 KB (14 Python modules)
 - **Core Modules**: 10 (auth, storage, cli, gui, versioning, locking, streaming, sync, queue, plus network subpackage)
@@ -324,7 +404,7 @@ Contributions welcome! Please:
 - **Supported Python**: 3.8+
 - **Platforms**: Windows, macOS, Linux
 - **Concurrent Users**: 4+ (design supports more)
-- **Current Version**: 1.0.3
+- **Current Version**: 1.0.4
 
 ## Support
 
