@@ -2,11 +2,12 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![No Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://github.com/taaha-khan/p2pdocs)
+[![No Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://github.com/taaha-0548/P2PDocs)
+[![GitHub](https://img.shields.io/badge/GitHub-taaha--0548%2FP2PDocs-black)](https://github.com/taaha-0548/P2PDocs)
 
 A production-ready peer-to-peer collaborative document editor built entirely with Python's standard library. Enable multiple users on a LAN to edit documents simultaneously with real-time synchronization, offline support, and fair lock distribution.
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
 - **True P2P Architecture**: No central server required - users connect directly via TCP/UDP
@@ -14,7 +15,6 @@ A production-ready peer-to-peer collaborative document editor built entirely wit
 - **Fair Lock Distribution**: FIFO queue prevents user starvation
 - **Offline Support**: Queue edits offline, auto-sync on reconnect
 - **Version History**: Complete edit tracking with author attribution
-- **Access Control**: Fine-grained READ/WRITE/ADMIN permissions
 - **GUI Editor**: Built-in Tkinter editor with colored cursors
 
 ### Technical Highlights
@@ -24,7 +24,7 @@ A production-ready peer-to-peer collaborative document editor built entirely wit
 - **High Performance**: Lock acquisition <1ms, message serialization <1ms
 - **Production Ready**: 57+ comprehensive tests, all passing
 
-## 📦 Installation
+## Installation
 
 ### Via pip (Recommended)
 ```bash
@@ -38,7 +38,7 @@ cd p2pdocs
 pip install -e .
 ```
 
-## 🎯 Quick Start
+## Quick Start
 
 ### 1. User Management
 
@@ -55,16 +55,13 @@ p2pdocs login alice password123
 
 ```bash
 # Create document
-p2pdocs create team-project --content "# Team Project\n\nInitial content"
+p2pdocs new team-project --content "# Team Project\n\nInitial content"
 
 # List documents
 p2pdocs list
 
-# Read document
-p2pdocs read team-project
-
-# Update document
-p2pdocs update team-project "Updated content"
+# View document (terminal)
+p2pdocs view team-project
 
 # Delete document
 p2pdocs delete team-project
@@ -75,13 +72,13 @@ p2pdocs delete team-project
 **Terminal 1 (Alice):**
 ```bash
 p2pdocs login alice password123
-p2pdocs open team-project    # Opens GUI editor
+p2pdocs edit team-project    # Opens GUI editor
 ```
 
 **Terminal 2 (Bob):**
 ```bash
 p2pdocs login bob password456
-p2pdocs open team-project    # Joins same document
+p2pdocs edit team-project    # Joins same document
 ```
 
 Both users now see:
@@ -90,37 +87,23 @@ Both users now see:
 - Lock status and queue position
 - Version history
 
-### 4. Access Control
-
-```bash
-# Grant permissions (as document owner)
-p2pdocs grant team-project bob WRITE
-p2pdocs grant team-project charlie READ
-# Permissions: READ (view only), WRITE (edit), ADMIN (full control)
-```
-
-## 📋 CLI Commands
+## CLI Commands
 
 ```
 User Management:
-  p2pdocs register <username> <password>
-  p2pdocs login <username> <password>
-  p2pdocs users
+  p2pdocs register <username> <password>    Register a new user
+  p2pdocs login <username> <password>       Login as a user
+  p2pdocs users                             List registered users
 
 Document Management:
-  p2pdocs create <docname> [--content TEXT]
-  p2pdocs read <docname>
-  p2pdocs update <docname> <content>
-  p2pdocs delete <docname>
-  p2pdocs list
-
-Collaborative Features:
-  p2pdocs open <docname>              # Opens in GUI
-  p2pdocs edit                        # Launch default editor
-  p2pdocs grant <docname> <user> <permission>
+  p2pdocs new <docname> [--content TEXT]    Create a new document
+  p2pdocs view <docname>                    View document in terminal
+  p2pdocs edit <docname>                    Edit document in GUI
+  p2pdocs delete <docname>                  Delete a document
+  p2pdocs list                              List all documents
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### 10 Implementation Phases
 
@@ -161,7 +144,7 @@ Locking  Sync   Streaming                |
 Other P2PDocs Nodes
 ```
 
-## 💾 Data Storage
+## Data Storage
 
 Documents and settings stored in:
 - **Linux/Mac**: `~/.p2pdocs/`
@@ -176,26 +159,26 @@ Structure:
 └── session.json        # Current session
 ```
 
-## 🔐 Security
+## Security
 
 - **Password Hashing**: SHA256 with salt
 - **Session Management**: Token-based sessions
 - **Access Control**: Owner-enforced permissions
 - **No External Auth**: Self-contained system
 
-## ⚡ Performance
+## Performance
 
 All targets met on LAN (tested with 4+ users):
 
 | Operation | Target | Actual | Status |
 |-----------|--------|--------|--------|
-| Keystroke latency | 5-10ms | 5-8ms | ✅ |
-| Lock acquisition | <1ms | <0.5ms | ✅ |
-| Message serialization | <1ms | <0.2ms | ✅ |
-| Peer discovery | <5s | 2-4s | ✅ |
-| Document read | <10ms | 2-5ms | ✅ |
+| Keystroke latency | 5-10ms | 5-8ms | PASS |
+| Lock acquisition | <1ms | <0.5ms | PASS |
+| Message serialization | <1ms | <0.2ms | PASS |
+| Peer discovery | <5s | 2-4s | PASS |
+| Document read | <10ms | 2-5ms | PASS |
 
-## 🧪 Testing
+## Testing
 
 ### Run all tests
 ```bash
@@ -212,9 +195,9 @@ pytest tests/test_auth.py -v
 pytest tests/ --cov=p2pdocs --cov-report=html
 ```
 
-**Test Results**: 57/57 tests passing ✅
+**Test Results**: 57/57 tests passing
 
-## 🎓 Use Cases
+## Use Cases
 
 - **Team Documentation**: Real-time collaborative documentation
 - **Project Planning**: Teams working on shared project docs
@@ -222,43 +205,77 @@ pytest tests/ --cov=p2pdocs --cov-report=html
 - **Offline-First**: Works when users go offline, syncs automatically
 - **Privacy-Focused**: No data sent to external servers
 
-## 🛠️ Development
+## Development
 
 ### Project Structure
 ```
 p2pdocs/
-├── __init__.py
-├── auth.py                 # Authentication
-├── storage.py              # Document storage
-├── cli.py                  # Command-line interface
-├── gui.py                  # Tkinter GUI
-├── versioning.py           # Version history & ACL
-├── locking.py              # Lock management
-├── streaming.py            # Keystroke streaming
-├── sync.py                 # Offline sync
-├── queue.py                # Fair FIFO queue
-└── network/
-    ├── protocol.py         # Message protocol
-    ├── server.py           # TCP server
-    ├── client.py           # TCP client
-    └── discovery.py        # Peer discovery
+├── __init__.py             # Package initialization
+├── auth.py                 # User authentication & session management
+├── storage.py              # Document storage and persistence
+├── cli.py                  # Command-line interface (8 commands)
+├── gui.py                  # Tkinter GUI editor with real-time updates
+├── versioning.py           # Version history and document tracking
+├── locking.py              # Distributed lock coordination
+├── streaming.py            # Real-time keystroke streaming
+├── sync.py                 # Offline queue and auto-sync
+├── queue.py                # Fair FIFO lock distribution
+└── network/                # P2P networking package
+    ├── __init__.py
+    ├── protocol.py         # Message protocol and serialization
+    ├── server.py           # TCP server for document synchronization
+    ├── client.py           # TCP client for peer connections
+    └── discovery.py        # UDP broadcast peer discovery
+
+Root Configuration:
+├── setup.py                # setuptools configuration
+├── pyproject.toml          # Modern Python project metadata
+├── README.md               # Project documentation
+├── LICENSE                 # MIT License
+├── CONTRIBUTING.md         # Contribution guidelines
+├── MANIFEST.in             # Package distribution manifest
+└── .gitignore              # Git ignore rules
+
+GitHub Automation:
+└── .github/
+    └── workflows/
+        └── publish.yml     # Automated PyPI publishing via OIDC
 ```
+
+### Core Modules
+
+- **auth.py**: User registration, login, password hashing with SHA256
+- **storage.py**: JSON-based document storage with file I/O
+- **cli.py**: 8-command interface (register, login, new, view, edit, delete, list, users)
+- **gui.py**: Tkinter editor with colored cursors and real-time collaboration
+- **versioning.py**: Document version tracking and history management
+- **locking.py**: Distributed lock with timeout and FIFO queue
+- **streaming.py**: Character-level keystroke synchronization
+- **sync.py**: Offline queue with reconnection logic
+- **queue.py**: Fair lock distribution (prevents user starvation)
+
+### Network Layer
+
+- **network/protocol.py**: JSON message protocol over TCP
+- **network/server.py**: Multi-client TCP server
+- **network/client.py**: TCP client for peer connections
+- **network/discovery.py**: UDP broadcast for LAN peer discovery
 
 ### Adding Features
 
 1. Create a new module in `p2pdocs/`
-2. Add tests in `tests/test_*.py`
-3. Update `p2pdocs/cli.py` if adding CLI commands
-4. Update documentation in `PROJECT_ANALYSIS.md`
+2. Add CLI command in `p2pdocs/cli.py` if user-facing
+3. Update `pyproject.toml` if adding dependencies
+4. Test locally before pushing
 
 ### Code Quality
 
 - **Style**: Follow PEP 8
-- **Documentation**: Docstrings for all functions
-- **Testing**: Aim for >90% coverage
+- **Documentation**: Docstrings for all functions and classes
 - **Type Hints**: Use Python type hints where applicable
+- **Testing**: Run tests to verify changes don't break functionality
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "User already exists" error
 This is normal - users persist between sessions. Use `p2pdocs login` instead.
@@ -272,11 +289,11 @@ Default lock timeout is 300 seconds. Adjust in `p2pdocs/locking.py` if needed.
 ### Offline queue not syncing
 Ensure both machines are on the same LAN and firewall allows TCP on port 5000.
 
-## 📝 License
+## License
 
 MIT License - See LICENSE file for details
 
-## 👥 Contributing
+## Contributing
 
 Contributions welcome! Please:
 1. Fork the repository
@@ -285,13 +302,12 @@ Contributions welcome! Please:
 4. Ensure all tests pass
 5. Submit a pull request
 
-## 📚 Documentation
+## Documentation
 
 - **PROJECT_ANALYSIS.md**: Complete architecture and design
-- **README_FULL_IMPLEMENTATION.md**: Implementation details for each phase
 - Inline code documentation: Docstrings in all modules
 
-## 🚀 Performance Tips
+## Performance Tips
 
 - Keep documents under 1MB for best performance
 - Use on local LAN for lowest latency (5-10ms)
@@ -299,23 +315,28 @@ Contributions welcome! Please:
 - Use offline mode for mobile/unreliable connections
 - Monitor lock queue if >10 users waiting
 
-## 📊 Statistics
+## Statistics
 
-- **Lines of Code**: 3,500+
-- **Test Coverage**: 57 tests, 100% passing
-- **External Dependencies**: 0
+- **Total Code Size**: ~120 KB (14 Python modules)
+- **Core Modules**: 10 (auth, storage, cli, gui, versioning, locking, streaming, sync, queue, plus network subpackage)
+- **Network Modules**: 4 (protocol, server, client, discovery)
+- **External Dependencies**: 0 (uses only Python stdlib)
 - **Supported Python**: 3.8+
 - **Platforms**: Windows, macOS, Linux
 - **Concurrent Users**: 4+ (design supports more)
+- **Current Version**: 1.0.1
 
-## 🤝 Support
+## Support
 
 - Check inline code documentation
 - Review test files for usage examples
 - See PROJECT_ANALYSIS.md for architecture details
+- Email: taaha2004@gmail.com
 
 ---
 
-**P2PDocs: Simple. Powerful. Distributed.** 🎉
+P2PDocs: Simple. Powerful. Distributed.
 
-Made with ❤️ for peer-to-peer collaboration
+For peer-to-peer collaboration on local networks.
+
+GitHub: https://github.com/taaha-0548/P2PDocs
