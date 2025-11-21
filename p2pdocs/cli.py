@@ -1,6 +1,7 @@
 """
-CLI Module - Command-line interface for P2PDocs
-Phase 1: User-facing CLI for authentication and document management
+CLI Module - Streamlined command-line interface for P2PDocs
+Removed redundant commands: read, open, update, create
+Kept core functionality: register, login, new, edit, view, delete, list, users
 """
 
 import argparse
@@ -64,7 +65,7 @@ class P2PDocsCLI:
             print(f"[FAIL] {message}")
         return success
     
-    def cmd_create_doc(self, args):
+    def cmd_new_doc(self, args):
         """Handle document creation"""
         if not self.current_user:
             print("[FAIL] Please login first")
@@ -81,8 +82,8 @@ class P2PDocsCLI:
             print(f"[FAIL] {message}")
         return success
     
-    def cmd_read_doc(self, args):
-        """Handle document reading"""
+    def cmd_view_doc(self, args):
+        """Handle document viewing in terminal"""
         success, content = self.storage.read_document(args.name)
         if success:
             print(f"[OK] Content of '{args.name}':")
@@ -93,8 +94,8 @@ class P2PDocsCLI:
             print(f"[FAIL] {content}")
         return success
     
-    def cmd_open_doc(self, args):
-        """Handle document opening in GUI editor"""
+    def cmd_edit_doc(self, args):
+        """Handle document editing in GUI editor"""
         if not self.current_user:
             print("[FAIL] Please login first")
             return False
@@ -102,32 +103,25 @@ class P2PDocsCLI:
         try:
             from .gui import P2PDocsEditor
             
-            # Verify document exists
-            success, content = self.storage.read_document(args.name)
-            if not success:
-                print(f"[FAIL] Document '{args.name}' not found")
-                return False
+            # If document name provided, open specific document
+            if args.name:
+                success, content = self.storage.read_document(args.name)
+                if not success:
+                    print(f"[FAIL] Document '{args.name}' not found")
+                    return False
+                print(f"[OK] Opening '{args.name}' in GUI editor...")
+            else:
+                print(f"[OK] Launching GUI editor for user '{self.current_user}'...")
             
-            print(f"[OK] Opening '{args.name}' in GUI editor...")
-            editor = P2PDocsEditor(self.current_user, document_name=args.name)
+            editor = P2PDocsEditor(
+                self.current_user,
+                document_name=args.name if args.name else None
+            )
             editor.run()
             return True
         except Exception as e:
-            print(f"[FAIL] Could not open document: {e}")
+            print(f"[FAIL] Could not launch editor: {e}")
             return False
-    
-    def cmd_update_doc(self, args):
-        """Handle document update"""
-        if not self.current_user:
-            print("[FAIL] Please login first")
-            return False
-        
-        success, message = self.storage.update_document(args.name, args.content)
-        if success:
-            print(f"[OK] {message}")
-        else:
-            print(f"[FAIL] {message}")
-        return success
     
     def cmd_delete_doc(self, args):
         """Handle document deletion"""
@@ -165,22 +159,6 @@ class P2PDocsCLI:
             print("[OK] No users registered")
         return True
     
-    def cmd_edit_gui(self, args):
-        """Launch GUI editor for the current user"""
-        if not self.current_user:
-            print("[FAIL] Please login first")
-            return False
-        
-        try:
-            from .gui import P2PDocsEditor
-            print(f"[OK] Launching GUI for user '{self.current_user}'...")
-            editor = P2PDocsEditor(self.current_user)
-            editor.run()
-            return True
-        except Exception as e:
-            print(f"[FAIL] Could not launch GUI: {e}")
-            return False
-    
     def run(self, argv=None):
         """Main CLI entry point"""
         parser = argparse.ArgumentParser(
@@ -202,27 +180,21 @@ class P2PDocsCLI:
         login_parser.add_argument("password", help="Password")
         login_parser.set_defaults(func=self.cmd_login)
         
-        # Create document command
-        create_parser = subparsers.add_parser("create", help="Create a new document")
-        create_parser.add_argument("name", help="Document name")
-        create_parser.add_argument("--content", "-c", help="Initial content", default="")
-        create_parser.set_defaults(func=self.cmd_create_doc)
+        # New document command
+        new_parser = subparsers.add_parser("new", help="Create a new document")
+        new_parser.add_argument("name", help="Document name")
+        new_parser.add_argument("--content", "-c", help="Initial content", default="")
+        new_parser.set_defaults(func=self.cmd_new_doc)
         
-        # Read document command
-        read_parser = subparsers.add_parser("read", help="Read a document")
-        read_parser.add_argument("name", help="Document name")
-        read_parser.set_defaults(func=self.cmd_read_doc)
+        # View document command
+        view_parser = subparsers.add_parser("view", help="View document in terminal")
+        view_parser.add_argument("name", help="Document name")
+        view_parser.set_defaults(func=self.cmd_view_doc)
         
-        # Open document command
-        open_parser = subparsers.add_parser("open", help="Open a document")
-        open_parser.add_argument("name", help="Document name")
-        open_parser.set_defaults(func=self.cmd_open_doc)
-        
-        # Update document command
-        update_parser = subparsers.add_parser("update", help="Update a document")
-        update_parser.add_argument("name", help="Document name")
-        update_parser.add_argument("content", help="New content")
-        update_parser.set_defaults(func=self.cmd_update_doc)
+        # Edit document command (GUI)
+        edit_parser = subparsers.add_parser("edit", help="Edit document in GUI")
+        edit_parser.add_argument("name", nargs="?", default=None, help="Document name (optional)")
+        edit_parser.set_defaults(func=self.cmd_edit_doc)
         
         # Delete document command
         delete_parser = subparsers.add_parser("delete", help="Delete a document")
@@ -234,12 +206,8 @@ class P2PDocsCLI:
         list_parser.set_defaults(func=self.cmd_list_docs)
         
         # List users command
-        users_parser = subparsers.add_parser("users", help="List all registered users")
+        users_parser = subparsers.add_parser("users", help="List registered users")
         users_parser.set_defaults(func=self.cmd_users)
-        
-        # Edit GUI command
-        edit_parser = subparsers.add_parser("edit", help="Launch GUI text editor")
-        edit_parser.set_defaults(func=self.cmd_edit_gui)
         
         args = parser.parse_args(argv)
         

@@ -1,20 +1,12 @@
 """
-Document Versioning and Access Control Module
-Phase 5: Document Versioning & ACLs
+Document Versioning Module
+Phase 5: Document version tracking (simplified - no ACL)
 """
 
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 from datetime import datetime
-from enum import Enum
-
-
-class AccessLevel(Enum):
-    """Access control levels"""
-    READ = "read"           # Can read document
-    WRITE = "write"        # Can read and write
-    ADMIN = "admin"        # Can read, write, and manage access
 
 
 class DocumentVersion:
@@ -60,68 +52,6 @@ class DocumentVersion:
         )
 
 
-class AccessControlList:
-    """Manages access control for a document"""
-    
-    def __init__(self, owner: str):
-        """
-        Initialize ACL
-        
-        Args:
-            owner: Username of document owner (has ADMIN access)
-        """
-        self.owner = owner
-        self.permissions: Dict[str, AccessLevel] = {owner: AccessLevel.ADMIN}
-    
-    def grant_access(self, username: str, level: AccessLevel):
-        """Grant access to a user"""
-        self.permissions[username] = level
-    
-    def revoke_access(self, username: str):
-        """Revoke access from a user"""
-        if username != self.owner:  # Can't revoke owner
-            self.permissions.pop(username, None)
-    
-    def get_access_level(self, username: str) -> Optional[AccessLevel]:
-        """Get user's access level"""
-        return self.permissions.get(username)
-    
-    def can_read(self, username: str) -> bool:
-        """Check if user can read"""
-        level = self.get_access_level(username)
-        return level in [AccessLevel.READ, AccessLevel.WRITE, AccessLevel.ADMIN]
-    
-    def can_write(self, username: str) -> bool:
-        """Check if user can write"""
-        level = self.get_access_level(username)
-        return level in [AccessLevel.WRITE, AccessLevel.ADMIN]
-    
-    def can_admin(self, username: str) -> bool:
-        """Check if user can administer access"""
-        level = self.get_access_level(username)
-        return level == AccessLevel.ADMIN
-    
-    def get_all_permissions(self) -> Dict[str, str]:
-        """Get all permissions as dict"""
-        return {user: level.value for user, level in self.permissions.items()}
-    
-    def to_dict(self) -> dict:
-        """Convert to dictionary"""
-        return {
-            "owner": self.owner,
-            "permissions": self.get_all_permissions()
-        }
-    
-    @staticmethod
-    def from_dict(data: dict) -> 'AccessControlList':
-        """Create from dictionary"""
-        acl = AccessControlList(data["owner"])
-        for user, level_str in data["permissions"].items():
-            if user != data["owner"]:  # Owner already set
-                acl.permissions[user] = AccessLevel(level_str)
-        return acl
-
-
 class DocumentHistory:
     """Manages version history for a document"""
     
@@ -136,7 +66,6 @@ class DocumentHistory:
         self.doc_name = doc_name
         self.owner = owner
         self.versions: List[DocumentVersion] = []
-        self.acl = AccessControlList(owner)
     
     def add_version(self, content: str, author: str, message: str = "") -> int:
         """
@@ -193,15 +122,13 @@ class DocumentHistory:
         return {
             "doc_name": self.doc_name,
             "owner": self.owner,
-            "versions": [v.to_dict() for v in self.versions],
-            "acl": self.acl.to_dict()
+            "versions": [v.to_dict() for v in self.versions]
         }
     
     @staticmethod
     def from_dict(data: dict) -> 'DocumentHistory':
         """Create from dictionary"""
         history = DocumentHistory(data["doc_name"], data["owner"])
-        history.acl = AccessControlList.from_dict(data["acl"])
         
         for v_data in data["versions"]:
             version = DocumentVersion.from_dict(v_data)
@@ -275,37 +202,6 @@ class VersioningManager:
     def get_history(self, doc_name: str) -> Optional[DocumentHistory]:
         """Get document history"""
         return self.load_history(doc_name)
-    
-    def grant_access(self, doc_name: str, username: str, level: AccessLevel) -> bool:
-        """Grant access to a user for a document"""
-        if doc_name not in self.histories:
-            return False
-        
-        history = self.histories[doc_name]
-        history.acl.grant_access(username, level)
-        self._save_history(history)
-        return True
-    
-    def revoke_access(self, doc_name: str, username: str) -> bool:
-        """Revoke access from a user for a document"""
-        if doc_name not in self.histories:
-            return False
-        
-        history = self.histories[doc_name]
-        history.acl.revoke_access(username)
-        self._save_history(history)
-        return True
-    
-    def can_user_access(self, doc_name: str, username: str, write: bool = False) -> bool:
-        """Check if user can access document"""
-        if doc_name not in self.histories:
-            return False
-        
-        history = self.histories[doc_name]
-        if write:
-            return history.acl.can_write(username)
-        else:
-            return history.acl.can_read(username)
     
     def _save_history(self, history: DocumentHistory):
         """Save history to file"""
