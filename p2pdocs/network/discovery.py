@@ -159,11 +159,11 @@ class PeerDiscovery:
             return
         
         self.is_running = True
-        # NON-DAEMON thread so discovery persists even if CLI command exits!
+        # Daemon thread for graceful shutdown
         self.discovery_thread = threading.Thread(
             target=self._announce_loop,
             args=(interval,),
-            daemon=False
+            daemon=True
         )
         self.discovery_thread.start()
         logger.info(f"Peer discovery started for {self.username}")
@@ -248,10 +248,10 @@ class DiscoveryListener:
             return
         
         self.is_running = True
-        # NON-DAEMON thread so listener persists!
+        # Daemon thread for graceful shutdown
         self.listener_thread = threading.Thread(
             target=self._listen_loop,
-            daemon=False
+            daemon=True
         )
         self.listener_thread.start()
         logger.info(f"Discovery listener started on UDP {self.discovery_port}")
@@ -350,10 +350,10 @@ class DiscoveryManager:
         self.announcer.start(interval=5)
         self.listener.start()
         
-        # Start cleanup thread (NON-DAEMON - persists!)
+        # Start cleanup thread (daemon thread for graceful shutdown)
         self.cleanup_thread = threading.Thread(
             target=self._cleanup_loop,
-            daemon=False
+            daemon=True
         )
         self.cleanup_thread.start()
         
@@ -371,6 +371,9 @@ class DiscoveryManager:
         self.is_running = False
         self.announcer.stop()
         self.listener.stop()
+        # Join cleanup thread with timeout
+        if self.cleanup_thread and self.cleanup_thread.is_alive():
+            self.cleanup_thread.join(timeout=2)
         logger.info("Discovery manager stopped")
     
     def get_peers(self) -> list:

@@ -5,8 +5,8 @@ Phase 1: Local storage for documents and configuration
 
 import json
 import os
-import fcntl
 import threading
+import time
 from pathlib import Path
 from typing import Tuple, Optional, List
 from datetime import datetime
@@ -32,12 +32,21 @@ class StorageManager:
         self.documents_dir.mkdir(exist_ok=True)
         self.metadata_file = self.config_dir / "metadata.json"
         self.metadata_lock = threading.RLock()  # Lock for thread-safe metadata operations
+        self.file_locks = {}  # Per-file locks for concurrent write protection
+        self.file_locks_lock = threading.RLock()  # Lock for managing file_locks dict
         self._ensure_metadata_file()
     
     def _ensure_metadata_file(self):
         """Ensure metadata.json file exists"""
         if not self.metadata_file.exists():
             self.metadata_file.write_text(json.dumps({"documents": {}}, indent=2))
+    
+    def _get_file_lock(self, doc_name: str) -> threading.RLock:
+        """Get or create a lock for a specific document file"""
+        with self.file_locks_lock:
+            if doc_name not in self.file_locks:
+                self.file_locks[doc_name] = threading.RLock()
+            return self.file_locks[doc_name]
     
     def _load_metadata(self) -> dict:
         """Load metadata from JSON file with thread safety"""
@@ -171,16 +180,13 @@ class StorageManager:
             doc_path = self.documents_dir / f"{doc_name}.txt"
             
             try:
-                # Use file locking to prevent concurrent writes
-                # Open file and acquire exclusive lock for the duration of write
-                with open(doc_path, 'w') as f:
-                    try:
-                        fcntl.flock(f, fcntl.LOCK_EX)  # Exclusive lock (blocks until available)
+                # Use per-document lock to prevent concurrent writes (cross-platform)
+                file_lock = self._get_file_lock(doc_name)
+                with file_lock:
+                    with open(doc_path, 'w') as f:
                         f.write(content)
                         f.flush()  # Ensure data written to disk
                         os.fsync(f.fileno())  # Force filesystem sync
-                    finally:
-                        fcntl.flock(f, fcntl.LOCK_UN)  # Release lock
                 
                 # Update metadata
                 metadata["documents"][doc_name]["version"] += 1

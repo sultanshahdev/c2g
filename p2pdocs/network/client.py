@@ -89,7 +89,7 @@ class P2PClient:
             listener_thread = threading.Thread(
                 target=self._listen_to_peer,
                 args=(peer_socket, peer_username),
-                daemon=False  # Non-daemon to ensure cleanup
+                daemon=True  # Daemon thread for graceful shutdown
             )
             listener_thread.start()
             self.message_threads[peer_username] = listener_thread

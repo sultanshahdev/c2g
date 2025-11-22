@@ -139,8 +139,8 @@ class NetworkManager:
         # Start client
         self.client.start()
         
-        # Start connection monitor thread (NON-DAEMON so it persists!)
-        self.monitor_thread = threading.Thread(target=self._monitor_peers, daemon=False)
+        # Start connection monitor thread (daemon for graceful shutdown)
+        self.monitor_thread = threading.Thread(target=self._monitor_peers, daemon=True)
         self.monitor_thread.start()
         
         logger.info(f"Network manager started on port {self.tcp_port}")
@@ -152,6 +152,9 @@ class NetworkManager:
         self.discovery_manager.stop()
         self.server.stop()
         self.client.stop()
+        # Join monitor thread with timeout
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_thread.join(timeout=2)
         logger.info("Network manager stopped")
     
     def _monitor_peers(self):

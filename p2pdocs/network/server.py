@@ -50,7 +50,7 @@ class P2PServer:
             logger.warning("Server already running")
             return
         
-        self.server_thread = threading.Thread(target=self._run, daemon=False)
+        self.server_thread = threading.Thread(target=self._run, daemon=True)
         self.server_thread.start()
         logger.info(f"Server started on {self.host}:{self.port}")
     
