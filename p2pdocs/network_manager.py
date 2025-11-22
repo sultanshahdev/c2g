@@ -161,6 +161,8 @@ class NetworkManager:
                 # Get alive peers from discovery
                 alive_peers = self.discovery_manager.get_peers()
                 
+                peer_count_before = len(self.connected_peers)
+                
                 for peer in alive_peers:
                     # Skip self
                     if peer.username == self.username:
@@ -175,6 +177,11 @@ class NetworkManager:
                     if not self.discovery_manager.get_peer(username):
                         del self.connected_peers[username]
                         logger.info(f"Peer {username} disconnected")
+                
+                # Trigger callback if peer list changed
+                peer_count_after = len(self.connected_peers)
+                if peer_count_after != peer_count_before and "on_peer_updated" in self.callbacks:
+                    self.callbacks["on_peer_updated"]()
                 
                 threading.Event().wait(5)  # Check every 5 seconds
             

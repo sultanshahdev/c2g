@@ -6,8 +6,9 @@ Phase 4: Tkinter GUI
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog
 import threading
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,29 @@ class P2PDocsEditor:
         
         self.current_document = None
         self.current_peers = []
+        self.peer_colors: Dict[str, str] = {}  # Maps peer username to color
         self.auto_sync_enabled = True  # Auto-sync changes to network
+        
+        # Auto-save state
+        self.last_saved_content = ""  # Track last saved content for auto-save
+        self.auto_save_timer = None  # Timer for auto-save
+        self.auto_save_interval = 3000  # Auto-save every 3 seconds (milliseconds)
+        self.has_unsaved_changes = False  # Flag for unsaved changes
+        
+        # Color palette for peers
+        self.color_palette = [
+            "#FF6B6B",  # Red
+            "#4ECDC4",  # Teal
+            "#45B7D1",  # Blue
+            "#FFA07A",  # Light Salmon
+            "#98D8C8",  # Mint
+            "#F7DC6F",  # Yellow
+            "#BB8FCE",  # Purple
+            "#85C1E2",  # Light Blue
+            "#F8B88B",  # Peach
+            "#82E0AA",  # Green
+        ]
+        self.color_index = 0
         
         # Handle window close event (X button or Alt+F4)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
@@ -58,6 +81,10 @@ class P2PDocsEditor:
         self._create_main_layout()
         
         logger.info(f"GUI initialized for {username}")
+        
+        # Create new blank document and register for peer updates
+        self._create_new_blank_document()
+        self._register_network_callbacks()
         
         # Open document if provided
         if self.document_name_to_open:
@@ -171,15 +198,191 @@ class P2PDocsEditor:
         self.status_label.pack(fill=tk.X)
     
     def _on_keystroke(self, event):
-        """Handle keystroke event"""
+        """Handle keystroke event - trigger auto-save"""
+        self.has_unsaved_changes = True
+        
+        # Reset auto-save timer
+        if self.auto_save_timer:
+            self.root.after_cancel(self.auto_save_timer)
+        
+        # Schedule auto-save
+        if self.current_document:
+            self.auto_save_timer = self.root.after(self.auto_save_interval, self._auto_save)
+        
         if self.on_keystroke:
             self.on_keystroke(event)
+    
+    def _create_new_blank_document(self):
+        """Create a new blank untitled document on startup"""
+        self.text_area.delete("1.0", tk.END)
+        self.current_document = None
+        self.last_saved_content = ""
+        self.has_unsaved_changes = False
+        self.doc_label.config(text="[Untitled]")
+        self.update_status("New untitled document ready for typing")
+        logger.info("Created new blank document on GUI startup")
+    
+    def _register_network_callbacks(self):
+        """Register callbacks with network manager for peer updates"""
+        if not self.network_manager:
+            return
+        
+        # Callback when a peer joins
+        def on_peer_joined(peer_username):
+            logger.info(f"Peer {peer_username} joined")
+            self.root.after(0, self._update_peers_from_network)
+        
+        # Callback when peers change
+        def on_peer_updated():
+            logger.info("Peer list updated")
+            self.root.after(0, self._update_peers_from_network)
+        
+        # Callback when document is updated by remote peer
+        def on_document_updated(doc_name, sender):
+            logger.info(f"Document '{doc_name}' updated by {sender}")
+            if doc_name == self.current_document:
+                # Document is currently open - show notification
+                self.root.after(0, self._on_remote_document_update, doc_name, sender)
+            else:
+                # Document not open - just log it
+                logger.info(f"Remote update to '{doc_name}' while viewing other document")
+        
+        # Callback when new document created by remote peer
+        def on_document_created(doc_name, owner):
+            logger.info(f"New document '{doc_name}' created by {owner}")
+            # Auto-add to recent documents
+            self.root.after(0, self.add_recent_document, doc_name)
+        
+        self.network_manager.register_callback("on_peer_joined", on_peer_joined)
+        self.network_manager.register_callback("on_peer_updated", on_peer_updated)
+        self.network_manager.register_callback("on_document_updated", on_document_updated)
+        self.network_manager.register_callback("on_document_created", on_document_created)
+        
+        # Initial peers list update
+        self.root.after(500, self._update_peers_from_network)
+    
+    def _update_peers_from_network(self):
+        """Update peer list from network manager"""
+        if not self.network_manager:
+            return
+        
+        try:
+            peers = self.network_manager.get_discovered_peers()
+            connected = self.network_manager.get_connected_peers()
+            connected_usernames = {p.username for p in connected}
+            
+            self.peers_listbox.delete(0, tk.END)
+            self.current_peers = []
+            
+            for peer in peers:
+                if peer.username == self.username:
+                    continue
+                
+                # Assign color if new peer
+                if peer.username not in self.peer_colors:
+                    color = self.color_palette[self.color_index % len(self.color_palette)]
+                    self.peer_colors[peer.username] = color
+                    self.color_index += 1
+                
+                # Format: peer_name (connected/disconnected)
+                status = "🟢 " if peer.username in connected_usernames else "🔴 "
+                display_name = f"{status}{peer.username}"
+                self.peers_listbox.insert(tk.END, display_name)
+                
+                self.current_peers.append(peer)
+                logger.debug(f"Added peer {peer.username} with color {self.peer_colors[peer.username]}")
+        
+        except Exception as e:
+            logger.error(f"Error updating peers: {e}")
+    
+    def get_peer_color(self, peer_username: str) -> str:
+        """Get assigned color for a peer"""
+        return self.peer_colors.get(peer_username, "#888888")
+    
+    def _on_remote_document_update(self, doc_name: str, sender: str):
+        """Handle remote document update - show merge dialog"""
+        if doc_name != self.current_document:
+            return
+        
+        try:
+            # Read updated version from storage
+            success, updated_content = self.storage.read_document(doc_name)
+            if not success:
+                logger.warning(f"Could not read updated document: {updated_content}")
+                return
+            
+            current_content = self.text_area.get("1.0", tk.END)
+            
+            # Check if content is different
+            if current_content == updated_content:
+                logger.info(f"Remote update to '{doc_name}' is identical to local")
+                self.update_status(f"'{doc_name}' updated by {sender} (no changes)")
+                return
+            
+            # Show merge dialog
+            peer_color = self.get_peer_color(sender)
+            response = messagebox.askyesnocancel(
+                "Document Updated",
+                f"Peer '{sender}' has updated this document.\n\n"
+                f"Do you want to accept their changes?\n\n"
+                f"Yes = Accept their version\n"
+                f"No = Keep your changes\n"
+                f"Cancel = Show diff",
+                icon=messagebox.INFO
+            )
+            
+            if response is True:
+                # Accept remote changes
+                self.text_area.delete("1.0", tk.END)
+                self.text_area.insert("1.0", updated_content)
+                self.update_status(f"Accepted changes from {sender}")
+                logger.info(f"Accepted remote update to '{doc_name}' from {sender}")
+            elif response is False:
+                # Keep local changes - no action needed
+                self.update_status(f"Kept local changes (rejected {sender}'s update)")
+                logger.info(f"Rejected remote update to '{doc_name}' from {sender}")
+            # else: Cancel - user wants to see diff (future enhancement)
+        
+        except Exception as e:
+            logger.error(f"Error handling remote update: {e}")
+            messagebox.showerror("Error", f"Error processing remote update: {str(e)}")
+    
+    def _auto_save(self):
+        """Auto-save document if changes detected"""
+        if not self.current_document or not self.has_unsaved_changes:
+            return
+        
+        try:
+            current_content = self.text_area.get("1.0", tk.END)
+            
+            # Only save if content changed since last save
+            if current_content != self.last_saved_content:
+                success, message = self.storage.update_document(self.current_document, current_content)
+                
+                if success:
+                    self.last_saved_content = current_content
+                    self.has_unsaved_changes = False
+                    self.update_status(f"Auto-saved: {self.current_document}")
+                    
+                    # Broadcast to network peers if connected
+                    if self.network_manager and self.auto_sync_enabled:
+                        self.network_manager.broadcast_document_update(
+                            self.current_document,
+                            current_content
+                        )
+                    
+                    logger.debug(f"Auto-saved document: {self.current_document}")
+        
+        except Exception as e:
+            logger.error(f"Auto-save error: {e}")
     
     def _new_document(self):
         """Create a new document"""
         self.text_area.delete("1.0", tk.END)
         self.current_document = None
-        self.doc_label.config(text="[New Document]")
+        self.last_saved_content = ""
+        self.has_unsaved_changes = False
+        self.doc_label.config(text="[Untitled]")
         self.update_status("New document created")
     
     def _open_document(self):
@@ -203,6 +406,8 @@ class P2PDocsEditor:
                 self.text_area.delete("1.0", tk.END)
                 self.text_area.insert("1.0", content)
                 self.current_document = doc_name
+                self.last_saved_content = content
+                self.has_unsaved_changes = False
                 self.doc_label.config(text=doc_name)
                 self.root.title(f"P2PDocs - {self.username} - {doc_name}")
                 self.add_recent_document(doc_name)
@@ -226,6 +431,8 @@ class P2PDocsEditor:
             success, message = self.storage.update_document(self.current_document, content)
             
             if success:
+                self.last_saved_content = content
+                self.has_unsaved_changes = False
                 self.update_status(f"Saved: {self.current_document}")
                 
                 # Broadcast to network peers if connected
@@ -263,6 +470,14 @@ class P2PDocsEditor:
                     self.root.title(f"P2PDocs - {self.username} - {doc_name}")
                     self.update_status(f"Saved: {doc_name}")
                     self.add_recent_document(doc_name)
+                    
+                    # Reset auto-save state
+                    self.last_saved_content = content
+                    self.has_unsaved_changes = False
+                    
+                    # Broadcast new document to peers
+                    if self.network_manager and self.auto_sync_enabled:
+                        self.network_manager.broadcast_document_created(doc_name, content)
                 else:
                     messagebox.showerror("Error", f"Failed to save: {message}")
             except Exception as e:
@@ -385,6 +600,8 @@ class P2PDocsEditor:
             if success:
                 self.set_document_content(content)
                 self.current_document = self.document_name_to_open
+                self.last_saved_content = content
+                self.has_unsaved_changes = False
                 self.root.title(f"P2PDocs - {self.username} - {self.document_name_to_open}")
                 self.add_recent_document(self.document_name_to_open)
                 logger.info(f"Auto-opened document: {self.document_name_to_open}")
@@ -407,4 +624,8 @@ class P2PDocsEditor:
     
     def close(self):
         """Close the GUI window - called by close button or File->Exit"""
+        # Cancel auto-save timer
+        if self.auto_save_timer:
+            self.root.after_cancel(self.auto_save_timer)
+        
         self.root.destroy()  # Destroy window triggers mainloop exit

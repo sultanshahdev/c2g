@@ -6,6 +6,7 @@ Phase 2: TCP Socket Communication - Server side
 import socket
 import threading
 import logging
+import json
 from typing import Callable, Dict, Optional
 from queue import Queue
 from .protocol import Message, MessageType
@@ -49,7 +50,7 @@ class P2PServer:
             logger.warning("Server already running")
             return
         
-        self.server_thread = threading.Thread(target=self._run, daemon=True)
+        self.server_thread = threading.Thread(target=self._run, daemon=False)
         self.server_thread.start()
         logger.info(f"Server started on {self.host}:{self.port}")
     
@@ -74,7 +75,7 @@ class P2PServer:
                     client_thread = threading.Thread(
                         target=self._handle_client,
                         args=(client_socket, client_addr),
-                        daemon=True
+                        daemon=False
                     )
                     client_thread.start()
                     self.client_threads[str(client_addr)] = client_thread
@@ -215,7 +216,12 @@ class P2PServer:
             except:
                 pass
         
+        # Wait for client threads to finish (max 2 seconds per thread)
+        for addr, thread in list(self.client_threads.items()):
+            try:
+                thread.join(timeout=2)
+            except:
+                pass
+        
+        self.client_threads.clear()
         logger.info("Server stopped")
-
-
-import json

@@ -69,6 +69,9 @@ class P2PClient:
             peer_socket.settimeout(self.timeout)
             peer_socket.connect((peer_host, peer_port))
             
+            # Set socket to non-blocking mode to allow immediate exit on shutdown
+            peer_socket.setblocking(False)
+            
             # Send announcement
             announce_msg = Message(
                 msg_type=MessageType.PEER_ANNOUNCE,
@@ -103,6 +106,7 @@ class P2PClient:
         try:
             while self.is_running:
                 try:
+                    # Non-blocking recv - may raise BlockingIOError if no data
                     data = peer_socket.recv(4096)
                     if not data:
                         logger.info(f"Connection closed by {peer_username}")
@@ -119,9 +123,18 @@ class P2PClient:
                     except ValueError as e:
                         logger.warning(f"Invalid message from {peer_username}: {str(e)}")
                 
+                except BlockingIOError:
+                    # No data available right now, wait a bit and retry
+                    time.sleep(0.1)
+                    continue
                 except socket.timeout:
                     # Timeout is normal, continue listening
                     continue
+                except OSError as e:
+                    # Catch all OS socket errors (includes WinError 10038, 10054, etc)
+                    if self.is_running:
+                        logger.error(f"Socket error from {peer_username}: {str(e)}")
+                    break
                 except Exception as e:
                     logger.error(f"Error receiving from {peer_username}: {str(e)}")
                     break
@@ -215,17 +228,26 @@ class P2PClient:
         if not self.is_running:
             return
         
+        logger.info("Stopping P2P client...")
         self.is_running = False
         
         # Close all connections
         with self.conn_lock:
-            for peer_socket in self.connections.values():
+            for peer_username, peer_socket in list(self.connections.items()):
                 try:
                     peer_socket.close()
                 except:
                     pass
             self.connections.clear()
         
+        # Wait for listener threads to finish
+        for peer_username, thread in list(self.message_threads.items()):
+            try:
+                thread.join(timeout=2)  # Wait max 2 seconds per thread
+            except:
+                pass
+        
+        self.message_threads.clear()
         logger.info("Client stopped")
     
     def is_connected_to(self, peer_username: str) -> bool:

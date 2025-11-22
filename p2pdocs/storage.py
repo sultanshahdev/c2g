@@ -4,6 +4,9 @@ Phase 1: Local storage for documents and configuration
 """
 
 import json
+import os
+import fcntl
+import threading
 from pathlib import Path
 from typing import Tuple, Optional, List
 from datetime import datetime
@@ -28,6 +31,7 @@ class StorageManager:
         self.documents_dir = self.config_dir / "documents"
         self.documents_dir.mkdir(exist_ok=True)
         self.metadata_file = self.config_dir / "metadata.json"
+        self.metadata_lock = threading.RLock()  # Lock for thread-safe metadata operations
         self._ensure_metadata_file()
     
     def _ensure_metadata_file(self):
@@ -36,19 +40,29 @@ class StorageManager:
             self.metadata_file.write_text(json.dumps({"documents": {}}, indent=2))
     
     def _load_metadata(self) -> dict:
-        """Load metadata from JSON file"""
-        try:
-            return json.loads(self.metadata_file.read_text())
-        except json.JSONDecodeError:
-            return {"documents": {}}
+        """Load metadata from JSON file with thread safety"""
+        with self.metadata_lock:
+            try:
+                return json.loads(self.metadata_file.read_text())
+            except json.JSONDecodeError:
+                return {"documents": {}}
     
     def _save_metadata(self, metadata: dict):
-        """Save metadata to JSON file"""
-        self.metadata_file.write_text(json.dumps(metadata, indent=2))
+        """Save metadata to JSON file with thread-safe atomic write"""
+        with self.metadata_lock:
+            try:
+                # Write to temporary file first, then rename (atomic on most filesystems)
+                temp_file = self.metadata_file.with_suffix('.tmp')
+                temp_file.write_text(json.dumps(metadata, indent=2))
+                # Atomic rename (overwrites metadata_file)
+                temp_file.replace(self.metadata_file)
+            except Exception as e:
+                # If temp file rename fails, at least we didn't corrupt the original
+                raise RuntimeError(f"Failed to save metadata: {e}")
     
     def create_document(self, doc_name: str, owner: str, content: str = "") -> Tuple[bool, str]:
         """
-        Create a new document
+        Create a new document with atomic file creation (prevents TOCTOU race)
         
         Args:
             doc_name: Name of document (without .txt extension)
@@ -72,26 +86,44 @@ class StorageManager:
         if "/" in doc_name or "\\" in doc_name:
             return False, "Invalid characters in document name"
         
-        metadata = self._load_metadata()
-        
-        if doc_name in metadata["documents"]:
-            return False, f"Document '{doc_name}' already exists"
-        
-        # Create document file
-        doc_path = self.documents_dir / f"{doc_name}.txt"
-        doc_path.write_text(content)
-        
-        # Add metadata
-        metadata["documents"][doc_name] = {
-            "owner": owner,
-            "created_at": datetime.now().isoformat(),
-            "version": 1,
-            "last_modified": datetime.now().isoformat(),
-            "file_path": str(doc_path)
-        }
-        
-        self._save_metadata(metadata)
-        return True, f"Document '{doc_name}' created successfully"
+        with self.metadata_lock:
+            metadata = self._load_metadata()
+            
+            if doc_name in metadata["documents"]:
+                return False, f"Document '{doc_name}' already exists"
+            
+            # Create document file with O_EXCL to prevent TOCTOU race
+            doc_path = self.documents_dir / f"{doc_name}.txt"
+            try:
+                # O_EXCL ensures atomic create - fails if file exists
+                # This prevents race condition where two processes check then both create
+                fd = os.open(str(doc_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+                try:
+                    with os.fdopen(fd, 'w') as f:
+                        f.write(content)
+                except:
+                    # Clean up file if write fails
+                    try:
+                        doc_path.unlink()
+                    except:
+                        pass
+                    raise
+            except FileExistsError:
+                return False, f"Document '{doc_name}' already exists (race condition detected)"
+            except Exception as e:
+                return False, f"Failed to create document: {e}"
+            
+            # Add metadata
+            metadata["documents"][doc_name] = {
+                "owner": owner,
+                "created_at": datetime.now().isoformat(),
+                "version": 1,
+                "last_modified": datetime.now().isoformat(),
+                "file_path": str(doc_path)
+            }
+            
+            self._save_metadata(metadata)
+            return True, f"Document '{doc_name}' created successfully"
     
     def read_document(self, doc_name: str) -> Tuple[bool, Optional[str]]:
         """
@@ -121,7 +153,7 @@ class StorageManager:
     
     def update_document(self, doc_name: str, content: str) -> Tuple[bool, str]:
         """
-        Update document content
+        Update document content with file locking to prevent concurrent write races
         
         Args:
             doc_name: Name of document
@@ -130,28 +162,38 @@ class StorageManager:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        metadata = self._load_metadata()
-        
-        if doc_name not in metadata["documents"]:
-            return False, f"Document '{doc_name}' not found"
-        
-        doc_path = self.documents_dir / f"{doc_name}.txt"
-        
-        try:
-            doc_path.write_text(content)
+        with self.metadata_lock:
+            metadata = self._load_metadata()
             
-            # Update metadata
-            metadata["documents"][doc_name]["version"] += 1
-            metadata["documents"][doc_name]["last_modified"] = datetime.now().isoformat()
-            self._save_metadata(metadata)
+            if doc_name not in metadata["documents"]:
+                return False, f"Document '{doc_name}' not found"
             
-            return True, f"Document '{doc_name}' updated (v{metadata['documents'][doc_name]['version']})"
-        except Exception as e:
-            return False, f"Error updating document: {str(e)}"
+            doc_path = self.documents_dir / f"{doc_name}.txt"
+            
+            try:
+                # Use file locking to prevent concurrent writes
+                # Open file and acquire exclusive lock for the duration of write
+                with open(doc_path, 'w') as f:
+                    try:
+                        fcntl.flock(f, fcntl.LOCK_EX)  # Exclusive lock (blocks until available)
+                        f.write(content)
+                        f.flush()  # Ensure data written to disk
+                        os.fsync(f.fileno())  # Force filesystem sync
+                    finally:
+                        fcntl.flock(f, fcntl.LOCK_UN)  # Release lock
+                
+                # Update metadata
+                metadata["documents"][doc_name]["version"] += 1
+                metadata["documents"][doc_name]["last_modified"] = datetime.now().isoformat()
+                self._save_metadata(metadata)
+                
+                return True, f"Document '{doc_name}' updated (v{metadata['documents'][doc_name]['version']})"
+            except Exception as e:
+                return False, f"Error updating document: {str(e)}"
     
     def delete_document(self, doc_name: str) -> Tuple[bool, str]:
         """
-        Delete a document
+        Delete a document with proper locking
         
         Args:
             doc_name: Name of document
@@ -159,23 +201,26 @@ class StorageManager:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        metadata = self._load_metadata()
-        
-        if doc_name not in metadata["documents"]:
-            return False, f"Document '{doc_name}' not found"
-        
-        doc_path = self.documents_dir / f"{doc_name}.txt"
-        
-        try:
-            if doc_path.exists():
-                doc_path.unlink()
+        with self.metadata_lock:
+            metadata = self._load_metadata()
             
-            del metadata["documents"][doc_name]
-            self._save_metadata(metadata)
+            if doc_name not in metadata["documents"]:
+                return False, f"Document '{doc_name}' not found"
             
-            return True, f"Document '{doc_name}' deleted"
-        except Exception as e:
-            return False, f"Error deleting document: {str(e)}"
+            doc_path = self.documents_dir / f"{doc_name}.txt"
+            
+            try:
+                # Delete file if it exists
+                if doc_path.exists():
+                    doc_path.unlink()
+                
+                # Remove from metadata
+                del metadata["documents"][doc_name]
+                self._save_metadata(metadata)
+                
+                return True, f"Document '{doc_name}' deleted"
+            except Exception as e:
+                return False, f"Error deleting document: {str(e)}"
     
     def list_documents(self) -> List[str]:
         """
