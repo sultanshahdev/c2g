@@ -36,6 +36,12 @@ class P2PClient:
         self.message_threads = {}
         self.is_running = False
         self.sender_thread = None
+        
+        # Reconnection tracking
+        self.peer_info: Dict[str, tuple] = {}  # username -> (host, port)
+        self.reconnect_attempts: Dict[str, int] = {}  # username -> attempt count
+        self.max_reconnect_attempts = 3
+        self.reconnect_delay = 2  # seconds
     
     def register_handler(self, msg_type: MessageType, handler: Callable):
         """Register a message handler for a specific message type"""
@@ -54,6 +60,10 @@ class P2PClient:
         Returns:
             True if connection successful, False otherwise
         """
+        # Store peer info for potential reconnection
+        self.peer_info[peer_username] = (peer_host, peer_port)
+        self.reconnect_attempts[peer_username] = 0
+        
         try:
             peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             peer_socket.settimeout(self.timeout)
@@ -76,7 +86,7 @@ class P2PClient:
             listener_thread = threading.Thread(
                 target=self._listen_to_peer,
                 args=(peer_socket, peer_username),
-                daemon=True
+                daemon=False  # Non-daemon to ensure cleanup
             )
             listener_thread.start()
             self.message_threads[peer_username] = listener_thread
@@ -125,6 +135,37 @@ class P2PClient:
             except:
                 pass
             logger.info(f"Listener for {peer_username} stopped")
+            
+            # Attempt reconnection if still running
+            if self.is_running and peer_username in self.peer_info:
+                self._attempt_reconnect(peer_username)
+    
+    def _attempt_reconnect(self, peer_username: str):
+        """Attempt to reconnect to a peer with exponential backoff"""
+        if peer_username not in self.reconnect_attempts:
+            return
+        
+        attempt = self.reconnect_attempts[peer_username]
+        if attempt >= self.max_reconnect_attempts:
+            logger.warning(f"Max reconnection attempts reached for {peer_username}")
+            return
+        
+        # Exponential backoff: 2s, 4s, 8s
+        wait_time = self.reconnect_delay * (2 ** attempt)
+        logger.info(f"Reconnecting to {peer_username} in {wait_time}s (attempt {attempt + 1}/{self.max_reconnect_attempts})")
+        
+        threading.Event().wait(wait_time)
+        
+        if not self.is_running or peer_username not in self.peer_info:
+            return
+        
+        host, port = self.peer_info[peer_username]
+        self.reconnect_attempts[peer_username] += 1
+        
+        if self.connect_to_peer(host, port, peer_username):
+            # Reset attempts on successful reconnection
+            self.reconnect_attempts[peer_username] = 0
+            logger.info(f"Successfully reconnected to {peer_username}")
     
     def send_message(self, peer_username: str, message: Message) -> bool:
         """Send a message to a specific peer"""

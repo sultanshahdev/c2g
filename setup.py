@@ -12,7 +12,7 @@ long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists
 
 setup(
     name="p2pdocs",
-    version="1.0.7",
+    version="1.0.8",
     author="P2PDocs Team",
     author_email="support@p2pdocs.io",
     description="A Peer-to-Peer Collaborative Document Editing System with Real-Time Synchronization",
