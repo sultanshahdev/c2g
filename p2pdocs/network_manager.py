@@ -52,6 +52,7 @@ class NetworkManager:
         self.username = username
         self.tcp_port = tcp_port
         self.config_dir = config_dir or str(Path.home() / ".p2pdocs")
+        self.is_running = False  # Track if network manager is running
         
         # Initialize components
         self.storage = StorageManager(self.config_dir)
@@ -122,7 +123,12 @@ class NetworkManager:
     
     def start(self):
         """Start network discovery and server"""
+        if self.is_running:
+            logger.warning("Network manager already running")
+            return
+        
         logger.info("Starting network manager...")
+        self.is_running = True
         
         # Start TCP server
         self.server.start()
@@ -130,14 +136,19 @@ class NetworkManager:
         # Start UDP discovery
         self.discovery_manager.start()
         
-        # Start connection monitor thread
-        threading.Thread(target=self._monitor_peers, daemon=True).start()
+        # Start client
+        self.client.start()
+        
+        # Start connection monitor thread (NON-DAEMON so it persists!)
+        self.monitor_thread = threading.Thread(target=self._monitor_peers, daemon=False)
+        self.monitor_thread.start()
         
         logger.info(f"Network manager started on port {self.tcp_port}")
     
     def stop(self):
         """Stop network manager"""
         logger.info("Stopping network manager...")
+        self.is_running = False
         self.discovery_manager.stop()
         self.server.stop()
         self.client.stop()
@@ -145,7 +156,7 @@ class NetworkManager:
     
     def _monitor_peers(self):
         """Monitor peers and connect to new ones"""
-        while True:
+        while self.is_running:
             try:
                 # Get alive peers from discovery
                 alive_peers = self.discovery_manager.get_peers()

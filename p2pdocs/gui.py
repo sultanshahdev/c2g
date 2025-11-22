@@ -50,6 +50,9 @@ class P2PDocsEditor:
         self.current_peers = []
         self.auto_sync_enabled = True  # Auto-sync changes to network
         
+        # Handle window close event (X button or Alt+F4)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        
         self._create_menu_bar()
         self._create_toolbar()
         self._create_main_layout()
@@ -392,9 +395,16 @@ class P2PDocsEditor:
             logger.error(f"Auto-open failed: {e}")
     
     def run(self):
-        """Start the GUI event loop"""
-        self.root.mainloop()
+        """Start the GUI event loop and cleanup on exit"""
+        try:
+            self.root.mainloop()
+        finally:
+            # Cleanup network manager when GUI exits (any way it exits)
+            if self.network_manager:
+                logger.info("GUI closing. Stopping network manager...")
+                self.network_manager.stop()
+                logger.info("Network manager stopped.")
     
     def close(self):
-        """Close the GUI"""
-        self.root.quit()
+        """Close the GUI window - called by close button or File->Exit"""
+        self.root.destroy()  # Destroy window triggers mainloop exit

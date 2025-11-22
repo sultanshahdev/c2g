@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DISCOVERY_PORT = 5555
-DISCOVERY_BROADCAST = "255.255.255.255"
+DISCOVERY_BROADCAST = "<broadcast>"  # Use <broadcast> token for proper broadcast
 
 
 class PeerInfo:
@@ -159,10 +159,11 @@ class PeerDiscovery:
             return
         
         self.is_running = True
+        # NON-DAEMON thread so discovery persists even if CLI command exits!
         self.discovery_thread = threading.Thread(
             target=self._announce_loop,
             args=(interval,),
-            daemon=True
+            daemon=False
         )
         self.discovery_thread.start()
         logger.info(f"Peer discovery started for {self.username}")
@@ -171,7 +172,11 @@ class PeerDiscovery:
         """Main announcement loop"""
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            # Allow multiple sockets to bind to the same port
+            if hasattr(socket, 'SO_REUSEPORT'):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             
             while self.is_running:
                 try:
@@ -185,7 +190,8 @@ class PeerDiscovery:
                     
                     # Broadcast announcement
                     message = json.dumps(announcement).encode('utf-8')
-                    self.socket.sendto(message, (DISCOVERY_BROADCAST, self.discovery_port))
+                    # Send to broadcast address on the discovery port
+                    self.socket.sendto(message, ('<broadcast>', self.discovery_port))
                     logger.debug(f"Announced {self.username} on UDP {self.discovery_port}")
                 
                 except Exception as e:
@@ -242,9 +248,10 @@ class DiscoveryListener:
             return
         
         self.is_running = True
+        # NON-DAEMON thread so listener persists!
         self.listener_thread = threading.Thread(
             target=self._listen_loop,
-            daemon=True
+            daemon=False
         )
         self.listener_thread.start()
         logger.info(f"Discovery listener started on UDP {self.discovery_port}")
@@ -254,10 +261,14 @@ class DiscoveryListener:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind(("", self.discovery_port))
+            # Allow multiple listeners on same port
+            if hasattr(socket, 'SO_REUSEPORT'):
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Bind to all interfaces on the discovery port
+            self.socket.bind(("0.0.0.0", self.discovery_port))
             self.socket.settimeout(5)
             
-            logger.info(f"Listening on UDP {self.discovery_port}")
+            logger.info(f"Listening on UDP 0.0.0.0:{self.discovery_port}")
             
             while self.is_running:
                 try:
@@ -339,10 +350,10 @@ class DiscoveryManager:
         self.announcer.start(interval=5)
         self.listener.start()
         
-        # Start cleanup thread
+        # Start cleanup thread (NON-DAEMON - persists!)
         self.cleanup_thread = threading.Thread(
             target=self._cleanup_loop,
-            daemon=True
+            daemon=False
         )
         self.cleanup_thread.start()
         
