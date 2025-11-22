@@ -174,9 +174,7 @@ class PeerDiscovery:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            # Allow multiple sockets to bind to the same port
-            if hasattr(socket, 'SO_REUSEPORT'):
-                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Don't bind - just send broadcasts
             
             while self.is_running:
                 try:
@@ -227,14 +225,16 @@ class PeerDiscovery:
 class DiscoveryListener:
     """Listens for UDP announcements from other peers"""
     
-    def __init__(self, registry: PeerRegistry, discovery_port: int = DISCOVERY_PORT):
+    def __init__(self, username: str, registry: PeerRegistry, discovery_port: int = DISCOVERY_PORT):
         """
         Initialize discovery listener
         
         Args:
+            username: Current user's username (to filter self-announcements)
             registry: PeerRegistry to add discovered peers to
             discovery_port: UDP port to listen on
         """
+        self.username = username
         self.registry = registry
         self.discovery_port = discovery_port
         self.socket = None
@@ -261,9 +261,13 @@ class DiscoveryListener:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            # Allow multiple listeners on same port
-            if hasattr(socket, 'SO_REUSEPORT'):
-                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            # Try SO_REUSEPORT if available (Linux), but don't fail on Windows
+            try:
+                if hasattr(socket, 'SO_REUSEPORT'):
+                    self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except (OSError, AttributeError):
+                pass  # SO_REUSEPORT not supported on this platform
+            
             # Bind to all interfaces on the discovery port
             self.socket.bind(("0.0.0.0", self.discovery_port))
             self.socket.settimeout(5)
@@ -282,9 +286,14 @@ class DiscoveryListener:
                             port = announcement.get("port")
                             host = addr[0]
                             
+                            # Skip self-announcements (loopback from own broadcasts)
+                            if username == self.username:
+                                logger.debug(f"Skipping self-announcement from {username}")
+                                continue
+                            
                             peer_info = PeerInfo(username, host, port)
                             self.registry.add_peer(peer_info)
-                            logger.debug(f"Discovered peer: {peer_info}")
+                            logger.info(f"Discovered peer: {peer_info}")
                     
                     except (json.JSONDecodeError, ValueError) as e:
                         logger.warning(f"Invalid announcement from {addr}: {str(e)}")
@@ -335,7 +344,7 @@ class DiscoveryManager:
         
         self.registry = PeerRegistry()
         self.announcer = PeerDiscovery(username, port, discovery_port)
-        self.listener = DiscoveryListener(self.registry, discovery_port)
+        self.listener = DiscoveryListener(username, self.registry, discovery_port)
         
         self.cleanup_thread = None
         self.is_running = False

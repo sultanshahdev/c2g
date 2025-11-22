@@ -9,6 +9,7 @@ import threading
 from typing import Optional, Callable, Dict
 import logging
 import random
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ class P2PDocsEditor:
         self.root.title(f"P2PDocs - {username}")
         self.root.geometry("900x600")
         
-        self.current_document = None
+        # Single shared document mode
+        self.shared_doc_name = "shared_document.txt"
+        self.current_document = self.shared_doc_name  # Always use shared document
         self.current_peers = []
         self.peer_colors: Dict[str, str] = {}  # Maps peer username to color
         self.auto_sync_enabled = True  # Auto-sync changes to network
@@ -85,23 +88,16 @@ class P2PDocsEditor:
         # Create new blank document and register for peer updates
         self._create_new_blank_document()
         self._register_network_callbacks()
-        
-        # Open document if provided
-        if self.document_name_to_open:
-            self.root.after(100, self._auto_open_document)
     
     def _create_menu_bar(self):
         """Create menu bar with File, Edit, View menus"""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
         
-        # File menu
+        # File menu - Simplified for single shared document
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New", command=self._new_document)
-        file_menu.add_command(label="Open", command=self._open_document)
         file_menu.add_command(label="Save", command=self._save_document)
-        file_menu.add_command(label="Save As", command=self._save_as_document)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.close)
         
@@ -129,17 +125,12 @@ class P2PDocsEditor:
         toolbar = tk.Frame(self.root, bg="lightgray", height=40)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        tk.Button(toolbar, text="New", command=self._new_document).pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="Open", command=self._open_document).pack(side=tk.LEFT, padx=2)
+        # Simplified toolbar - only Save button for shared document
         tk.Button(toolbar, text="Save", command=self._save_document).pack(side=tk.LEFT, padx=2)
         
-        tk.Label(toolbar, text=" | Document:").pack(side=tk.LEFT, padx=5)
-        self.doc_label = tk.Label(toolbar, text="[New Document]", bg="white", width=40)
+        tk.Label(toolbar, text=" | Shared Document:").pack(side=tk.LEFT, padx=5)
+        self.doc_label = tk.Label(toolbar, text=self.shared_doc_name, bg="white", width=40)
         self.doc_label.pack(side=tk.LEFT, padx=2)
-        
-        tk.Label(toolbar, text="Lock Status:").pack(side=tk.LEFT, padx=5)
-        self.lock_status = tk.Label(toolbar, text="⭘ Unlocked", fg="green", font=("Arial", 10, "bold"))
-        self.lock_status.pack(side=tk.LEFT, padx=2)
     
     def _create_main_layout(self):
         """Create main content area with text editor and sidebar"""
@@ -213,14 +204,31 @@ class P2PDocsEditor:
             self.on_keystroke(event)
     
     def _create_new_blank_document(self):
-        """Create a new blank untitled document on startup"""
-        self.text_area.delete("1.0", tk.END)
-        self.current_document = None
-        self.last_saved_content = ""
+        """Load the shared document on startup if it exists"""
+        try:
+            # Try to load existing shared document
+            success, content = self.storage.read_document(self.shared_doc_name)
+            
+            if success:
+                # Document exists, load it
+                self.text_area.delete("1.0", tk.END)
+                self.text_area.insert("1.0", content)
+                self.last_saved_content = content
+                logger.info(f"Loaded shared document: {content[:50] if content else '(empty)'}...")
+            else:
+                # Document doesn't exist yet - start with blank
+                self.text_area.delete("1.0", tk.END)
+                self.last_saved_content = ""
+                logger.info("Starting with blank document (waiting for peers or first save)")
+        except Exception as e:
+            logger.error(f"Error loading shared document: {e}")
+            self.text_area.delete("1.0", tk.END)
+            self.last_saved_content = ""
+        
         self.has_unsaved_changes = False
-        self.doc_label.config(text="[Untitled]")
-        self.update_status("New untitled document ready for typing")
-        logger.info("Created new blank document on GUI startup")
+        self.doc_label.config(text=self.shared_doc_name)
+        self.root.title(f"P2PDocs - {self.username}")
+        self.update_status("Ready - type and save to share with peers")
     
     def _register_network_callbacks(self):
         """Register callbacks with network manager for peer updates"""
@@ -237,26 +245,16 @@ class P2PDocsEditor:
             logger.info("Peer list updated")
             self.root.after(0, self._update_peers_from_network)
         
-        # Callback when document is updated by remote peer
-        def on_document_updated(doc_name, sender):
+        # Callback when shared document is updated by remote peer
+        def on_document_updated(doc_name, sender, content=None):
             logger.info(f"Document '{doc_name}' updated by {sender}")
-            if doc_name == self.current_document:
-                # Document is currently open - show notification
-                self.root.after(0, self._on_remote_document_update, doc_name, sender)
-            else:
-                # Document not open - just log it
-                logger.info(f"Remote update to '{doc_name}' while viewing other document")
-        
-        # Callback when new document created by remote peer
-        def on_document_created(doc_name, owner):
-            logger.info(f"New document '{doc_name}' created by {owner}")
-            # Auto-add to recent documents
-            self.root.after(0, self.add_recent_document, doc_name)
+            if doc_name == self.shared_doc_name:
+                # Shared document updated - refresh display
+                self.root.after(0, self._on_remote_document_update, doc_name, sender, content)
         
         self.network_manager.register_callback("on_peer_joined", on_peer_joined)
         self.network_manager.register_callback("on_peer_updated", on_peer_updated)
         self.network_manager.register_callback("on_document_updated", on_document_updated)
-        self.network_manager.register_callback("on_document_created", on_document_created)
         
         # Initial peers list update
         self.root.after(500, self._update_peers_from_network)
@@ -299,27 +297,40 @@ class P2PDocsEditor:
         """Get assigned color for a peer"""
         return self.peer_colors.get(peer_username, "#888888")
     
-    def _on_remote_document_update(self, doc_name: str, sender: str):
-        """Handle remote document update - show merge dialog"""
+    def _on_remote_document_update(self, doc_name: str, sender: str, content: str = None):
+        """Handle remote document update - show merge dialog or auto-update"""
         if doc_name != self.current_document:
             return
         
         try:
-            # Read updated version from storage
-            success, updated_content = self.storage.read_document(doc_name)
-            if not success:
-                logger.warning(f"Could not read updated document: {updated_content}")
-                return
+            # Use provided content if available, otherwise read from storage
+            if content is None:
+                success, updated_content = self.storage.read_document(doc_name)
+                if not success:
+                    logger.warning(f"Could not read updated document: {updated_content}")
+                    self.update_status(f"Document updated by {sender}")
+                    return
+            else:
+                updated_content = content
             
             current_content = self.text_area.get("1.0", tk.END)
             
             # Check if content is different
             if current_content == updated_content:
                 logger.info(f"Remote update to '{doc_name}' is identical to local")
-                self.update_status(f"'{doc_name}' updated by {sender} (no changes)")
+                self.update_status(f"'{doc_name}' synced with {sender}")
                 return
             
-            # Show merge dialog
+            # If local content is empty or unchanged, auto-accept remote
+            if not self.has_unsaved_changes or current_content.strip() == "":
+                self.text_area.delete("1.0", tk.END)
+                self.text_area.insert("1.0", updated_content)
+                self.last_saved_content = updated_content
+                self.update_status(f"Auto-updated from {sender}")
+                logger.info(f"Auto-accepted remote update to '{doc_name}' from {sender}")
+                return
+            
+            # Show merge dialog for conflicting changes
             peer_color = self.get_peer_color(sender)
             response = messagebox.askyesnocancel(
                 "Document Updated",
@@ -335,6 +346,7 @@ class P2PDocsEditor:
                 # Accept remote changes
                 self.text_area.delete("1.0", tk.END)
                 self.text_area.insert("1.0", updated_content)
+                self.last_saved_content = updated_content
                 self.update_status(f"Accepted changes from {sender}")
                 logger.info(f"Accepted remote update to '{doc_name}' from {sender}")
             elif response is False:
@@ -348,7 +360,7 @@ class P2PDocsEditor:
             messagebox.showerror("Error", f"Error processing remote update: {str(e)}")
     
     def _auto_save(self):
-        """Auto-save document if changes detected"""
+        """Auto-save document if changes detected - create on first save, update after"""
         if not self.current_document or not self.has_unsaved_changes:
             return
         
@@ -357,12 +369,19 @@ class P2PDocsEditor:
             
             # Only save if content changed since last save
             if current_content != self.last_saved_content:
-                success, message = self.storage.update_document(self.current_document, current_content)
+                docs = self.storage.list_documents()
+                
+                if self.shared_doc_name not in docs:
+                    # First save - create document
+                    success, message = self.storage.create_document(self.shared_doc_name, self.username, current_content)
+                else:
+                    # Update existing
+                    success, message = self.storage.update_document(self.current_document, current_content)
                 
                 if success:
                     self.last_saved_content = current_content
                     self.has_unsaved_changes = False
-                    self.update_status(f"Auto-saved: {self.current_document}")
+                    self.update_status(f"Auto-saved")
                     
                     # Broadcast to network peers if connected
                     if self.network_manager and self.auto_sync_enabled:
@@ -376,112 +395,43 @@ class P2PDocsEditor:
         except Exception as e:
             logger.error(f"Auto-save error: {e}")
     
-    def _new_document(self):
-        """Create a new document"""
-        self.text_area.delete("1.0", tk.END)
-        self.current_document = None
-        self.last_saved_content = ""
-        self.has_unsaved_changes = False
-        self.doc_label.config(text="[Untitled]")
-        self.update_status("New document created")
-    
-    def _open_document(self):
-        """Open a P2PDocs document"""
-        # Get list of available documents
-        docs = self.storage.list_documents()
-        if not docs:
-            messagebox.showinfo("Info", "No documents available")
-            return
-        
-        # Create a simple dialog to select document
-        dialog = tk.simpledialog.askstring(
-            "Open Document", 
-            f"Available documents:\n{', '.join(docs)}\n\nEnter document name:"
-        )
-        
-        if dialog:
-            doc_name = dialog.strip()
-            success, content = self.storage.read_document(doc_name)
-            if success:
-                self.text_area.delete("1.0", tk.END)
-                self.text_area.insert("1.0", content)
-                self.current_document = doc_name
-                self.last_saved_content = content
-                self.has_unsaved_changes = False
-                self.doc_label.config(text=doc_name)
-                self.root.title(f"P2PDocs - {self.username} - {doc_name}")
-                self.add_recent_document(doc_name)
-                self.update_status(f"Opened: {doc_name}")
-                
-                if self.on_document_open:
-                    self.on_document_open(doc_name)
-            else:
-                messagebox.showerror("Error", f"Failed to open document: {content}")
-    
+
     def _save_document(self):
-        """Save the current document to P2PDocs storage and broadcast to peers"""
-        if not self.current_document:
-            self._save_as_document()
-            return
-        
+        """Manually save - create if doesn't exist, update if it does"""
         try:
             content = self.text_area.get("1.0", tk.END)
             
-            # Save to P2PDocs storage
-            success, message = self.storage.update_document(self.current_document, content)
+            # Check if document exists, create if not, update if it does
+            docs = self.storage.list_documents()
+            
+            if self.shared_doc_name not in docs:
+                # Document doesn't exist - create it
+                success, message = self.storage.create_document(self.shared_doc_name, self.username, content)
+                logger.info(f"Created shared document on manual save")
+            else:
+                # Update existing
+                success, message = self.storage.update_document(self.shared_doc_name, content)
             
             if success:
                 self.last_saved_content = content
                 self.has_unsaved_changes = False
-                self.update_status(f"Saved: {self.current_document}")
+                self.update_status(f"Saved and shared")
                 
                 # Broadcast to network peers if connected
                 if self.network_manager and self.auto_sync_enabled:
                     self.network_manager.broadcast_document_update(
-                        self.current_document,
+                        self.shared_doc_name,
                         content
                     )
                 
                 if self.on_document_save:
-                    self.on_document_save(self.current_document, content)
+                    self.on_document_save(self.shared_doc_name, content)
             else:
                 messagebox.showerror("Error", f"Failed to save: {message}")
         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save document: {str(e)}")
-    
-    def _save_as_document(self):
-        """Save document with new name to P2PDocs storage"""
-        # Ask for document name instead of file path
-        dialog = tk.simpledialog.askstring("Save As", "Enter document name:")
-        if dialog:
-            doc_name = dialog.strip()
-            if not doc_name:
-                messagebox.showwarning("Warning", "Document name cannot be empty")
-                return
-            
-            try:
-                content = self.text_area.get("1.0", tk.END)
-                success, message = self.storage.create_document(doc_name, self.username, content)
-                
-                if success:
-                    self.current_document = doc_name
-                    self.doc_label.config(text=doc_name)
-                    self.root.title(f"P2PDocs - {self.username} - {doc_name}")
-                    self.update_status(f"Saved: {doc_name}")
-                    self.add_recent_document(doc_name)
-                    
-                    # Reset auto-save state
-                    self.last_saved_content = content
-                    self.has_unsaved_changes = False
-                    
-                    # Broadcast new document to peers
-                    if self.network_manager and self.auto_sync_enabled:
-                        self.network_manager.broadcast_document_created(doc_name, content)
-                else:
-                    messagebox.showerror("Error", f"Failed to save: {message}")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to save document: {str(e)}")
+
     
     def _undo(self):
         """Undo last action"""
@@ -587,30 +537,7 @@ class P2PDocsEditor:
         self.text_area.delete("1.0", tk.END)
         self.text_area.insert("1.0", content)
     
-    def _auto_open_document(self):
-        """Auto-open document if specified on startup"""
-        if not self.document_name_to_open:
-            return
-        
-        try:
-            from .storage import StorageManager
-            storage = StorageManager()
-            
-            success, content = storage.read_document(self.document_name_to_open)
-            if success:
-                self.set_document_content(content)
-                self.current_document = self.document_name_to_open
-                self.last_saved_content = content
-                self.has_unsaved_changes = False
-                self.root.title(f"P2PDocs - {self.username} - {self.document_name_to_open}")
-                self.add_recent_document(self.document_name_to_open)
-                logger.info(f"Auto-opened document: {self.document_name_to_open}")
-            else:
-                messagebox.showerror("Error", f"Could not open document: {content}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to open document: {e}")
-            logger.error(f"Auto-open failed: {e}")
-    
+
     def run(self):
         """Start the GUI event loop and cleanup on exit"""
         try:

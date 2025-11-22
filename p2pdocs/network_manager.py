@@ -64,6 +64,8 @@ class NetworkManager:
         self.connected_peers: Dict[str, PeerInfo] = {}
         self.shared_documents: Dict[str, List[str]] = {}  # doc_name -> [users editing]
         self.callbacks: Dict[str, Callable] = {}
+        self.shared_doc_name = "shared_document.txt"  # Single shared document for all peers
+        self.sync_lock = threading.Lock()  # Prevent duplicate sync operations
         
         # Register message handlers
         self._register_handlers()
@@ -79,37 +81,70 @@ class NetworkManager:
             content = message.payload.get("content") if message.payload else None
             sender = message.sender
             
-            if content:
-                # Update local storage
-                self.storage.update_document(doc_name, content)
+            # CRITICAL: Skip self-updates (own broadcasts coming back from network)
+            if sender == self.username:
+                logger.info(f"Skipping own update notification from {sender}")
+                return
             
-            # Notify callback
+            if content is not None:  # Allow empty string but not None
+                # Create or update document
+                existing_docs = self.storage.list_documents()
+                if doc_name not in existing_docs:
+                    # Document doesn't exist, create it
+                    self.storage.create_document(doc_name, sender, content)
+                    logger.info(f"Created document '{doc_name}' from {sender}")
+                else:
+                    # Document exists, update it
+                    self.storage.update_document(doc_name, content)
+            
+            # Notify callback with content included
             if "on_document_updated" in self.callbacks:
-                self.callbacks["on_document_updated"](doc_name, sender)
+                self.callbacks["on_document_updated"](doc_name, sender, content)
             
             logger.info(f"Document '{doc_name}' updated by {sender}")
         
-        # Sync response handler (document creation)
+        # Sync request handler (peer requesting shared document)
+        def handle_sync_request(message):
+            doc_name = message.document
+            sender = message.sender
+            
+            # Send the document back to requester
+            self._send_shared_document(sender)
+            logger.info(f"Sync request from {sender} for {doc_name}")
+        
+        # Sync response handler (document sync from peer)
         def handle_sync_response(message):
             doc_name = message.document
             content = message.payload.get("content") if message.payload else None
-            owner = message.payload.get("owner") if message.payload else message.sender
+            sender = message.sender
+            
+            # CRITICAL: Skip self-responses (own documents coming back from network)
+            if sender == self.username:
+                logger.info(f"Skipping own sync response from {sender}")
+                return
             
             if content:
-                # Create document locally if doesn't exist
+                # Create or update document locally
                 existing_docs = self.storage.list_documents()
                 if doc_name not in existing_docs:
-                    self.storage.create_document(doc_name, owner, content)
+                    self.storage.create_document(doc_name, sender, content)
+                else:
+                    # Update if already exists (shared document sync)
+                    self.storage.update_document(doc_name, content)
             
-            # Notify callback
-            if "on_document_created" in self.callbacks:
-                self.callbacks["on_document_created"](doc_name, owner)
+            # Notify callback (treat as update for shared docs)
+            if "on_document_updated" in self.callbacks:
+                self.callbacks["on_document_updated"](doc_name, sender)
             
-            logger.info(f"Document '{doc_name}' received from {owner}")
+            logger.info(f"Document '{doc_name}' synced from {sender}")
         
         # Peer announced handler
         def handle_peer_announce(message):
             peer_username = message.sender
+            
+            # Skip self-announcements
+            if peer_username == self.username:
+                return
             
             if "on_peer_joined" in self.callbacks:
                 self.callbacks["on_peer_joined"](peer_username)
@@ -117,6 +152,7 @@ class NetworkManager:
             logger.info(f"Peer {peer_username} announced")
         
         # Register handlers with server
+        self.server.register_handler(MessageType.SYNC_REQUEST, handle_sync_request)
         self.server.register_handler(MessageType.UPDATE_NOTIFICATION, handle_update_notification)
         self.server.register_handler(MessageType.SYNC_RESPONSE, handle_sync_response)
         self.server.register_handler(MessageType.PEER_ANNOUNCE, handle_peer_announce)
@@ -193,7 +229,7 @@ class NetworkManager:
                 threading.Event().wait(5)
     
     def _connect_to_peer(self, peer: PeerInfo):
-        """Connect to a peer"""
+        """Connect to a peer and sync shared document"""
         try:
             success = self.client.connect_to_peer(
                 peer_host=peer.host,
@@ -204,11 +240,56 @@ class NetworkManager:
             if success:
                 self.connected_peers[peer.username] = peer
                 logger.info(f"Connected to peer {peer.username} at {peer.host}:{peer.port}")
+                
+                # Request shared document from peer
+                self._request_shared_document(peer.username)
             else:
                 logger.warning(f"Failed to connect to peer {peer.username}")
         
         except Exception as e:
             logger.error(f"Error connecting to peer {peer.username}: {str(e)}")
+    
+    def _request_shared_document(self, peer_username: str):
+        """Request the shared document from a peer (SYNC_REQUEST)"""
+        try:
+            message = Message(
+                msg_type=MessageType.SYNC_REQUEST,
+                sender=self.username,
+                recipient=peer_username,
+                document=self.shared_doc_name,
+                payload={}
+            )
+            self.client.send_message(peer_username, message)
+            logger.info(f"Requested shared document from {peer_username}")
+        except Exception as e:
+            logger.error(f"Error requesting shared document from {peer_username}: {str(e)}")
+    
+    def _send_shared_document(self, peer_username: str):
+        """Send the shared document to a peer (SYNC_RESPONSE)"""
+        try:
+            success, content = self.storage.read_document(self.shared_doc_name)
+            
+            # If document doesn't exist on this peer, create it as empty
+            if not success:
+                logger.info(f"Shared document doesn't exist locally, creating empty one for {peer_username}")
+                success, msg = self.storage.create_document(self.shared_doc_name, self.username, "")
+                content = "" if success else ""
+            
+            # Send document to peer
+            message = Message(
+                msg_type=MessageType.SYNC_RESPONSE,
+                sender=self.username,
+                recipient=peer_username,
+                document=self.shared_doc_name,
+                payload={
+                    "content": content,
+                    "owner": self.username
+                }
+            )
+            self.client.send_message(peer_username, message)
+            logger.info(f"Sent shared document to {peer_username} ({len(content)} bytes)")
+        except Exception as e:
+            logger.error(f"Error sending shared document to {peer_username}: {str(e)}")
     
     def register_callback(self, event_name: str, callback: Callable):
         """Register callback for network events"""
@@ -216,7 +297,7 @@ class NetworkManager:
         logger.info(f"Registered callback for {event_name}")
     
     def broadcast_document_update(self, doc_name: str, content: str):
-        """Broadcast document update to all peers"""
+        """Broadcast document update to all peers (except self)"""
         message = Message(
             msg_type=MessageType.UPDATE_NOTIFICATION,
             sender=self.username,
@@ -227,8 +308,16 @@ class NetworkManager:
             }
         )
         
+        logger.info(f"Broadcasting update for '{doc_name}' to {len(self.connected_peers)} peers: {list(self.connected_peers.keys())}")
+        
         for peer_username in self.connected_peers.keys():
+            # Don't send to self
+            if peer_username == self.username:
+                logger.info(f"Skipping self ({self.username})")
+                continue
+            
             try:
+                logger.info(f"Sending update to {peer_username}")
                 self.client.send_message(peer_username, message)
             except Exception as e:
                 logger.error(f"Error sending update to {peer_username}: {str(e)}")
