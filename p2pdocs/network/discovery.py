@@ -174,7 +174,13 @@ class PeerDiscovery:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            # Don't bind - just send broadcasts
+            
+            # Try to set SO_REUSEPORT if on Linux
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                logger.debug("SO_REUSEPORT enabled for announcer")
+            except (AttributeError, OSError):
+                pass  # Not available on Windows, that's OK
             
             while self.is_running:
                 try:
@@ -186,9 +192,8 @@ class PeerDiscovery:
                         "timestamp": datetime.now().isoformat()
                     }
                     
-                    # Broadcast announcement
+                    # Broadcast announcement to all interfaces
                     message = json.dumps(announcement).encode('utf-8')
-                    # Send to broadcast address on the discovery port
                     self.socket.sendto(message, ('<broadcast>', self.discovery_port))
                     logger.debug(f"Announced {self.username} on UDP {self.discovery_port}")
                 
@@ -202,7 +207,7 @@ class PeerDiscovery:
                     threading.Event().wait(0.1)
         
         except Exception as e:
-            logger.error(f"Discovery error: {str(e)}")
+            logger.error(f"Discovery announcer error: {str(e)}")
         
         finally:
             if self.socket:
@@ -261,18 +266,23 @@ class DiscoveryListener:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            # Try SO_REUSEPORT if available (Linux), but don't fail on Windows
+            
+            # Try to set SO_REUSEPORT if on Linux
             try:
-                if hasattr(socket, 'SO_REUSEPORT'):
-                    self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-            except (OSError, AttributeError):
-                pass  # SO_REUSEPORT not supported on this platform
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                logger.debug("SO_REUSEPORT enabled for listener")
+            except (AttributeError, OSError):
+                pass  # Not available on Windows, that's OK
             
             # Bind to all interfaces on the discovery port
-            self.socket.bind(("0.0.0.0", self.discovery_port))
-            self.socket.settimeout(5)
+            try:
+                self.socket.bind(("0.0.0.0", self.discovery_port))
+                logger.info(f"Listening on UDP 0.0.0.0:{self.discovery_port}")
+            except OSError as e:
+                logger.error(f"Failed to bind UDP port {self.discovery_port}: {e}")
+                return
             
-            logger.info(f"Listening on UDP 0.0.0.0:{self.discovery_port}")
+            self.socket.settimeout(5)
             
             while self.is_running:
                 try:
@@ -286,7 +296,7 @@ class DiscoveryListener:
                             port = announcement.get("port")
                             host = addr[0]
                             
-                            # Skip self-announcements (loopback from own broadcasts)
+                            # Skip self-announcements
                             if username == self.username:
                                 logger.debug(f"Skipping self-announcement from {username}")
                                 continue
@@ -299,7 +309,6 @@ class DiscoveryListener:
                         logger.warning(f"Invalid announcement from {addr}: {str(e)}")
                 
                 except socket.timeout:
-                    # Timeout is normal
                     continue
                 except Exception as e:
                     if self.is_running:

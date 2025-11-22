@@ -228,7 +228,7 @@ class P2PDocsEditor:
         self.has_unsaved_changes = False
         self.doc_label.config(text=self.shared_doc_name)
         self.root.title(f"P2PDocs - {self.username}")
-        self.update_status("Ready - type and save to share with peers")
+        self.update_status("Ready - type and auto-sync with peers")
     
     def _register_network_callbacks(self):
         """Register callbacks with network manager for peer updates"""
@@ -397,20 +397,16 @@ class P2PDocsEditor:
     
 
     def _save_document(self):
-        """Manually save - create if doesn't exist, update if it does"""
+        """Manually save - try update first, create if doesn't exist"""
         try:
             content = self.text_area.get("1.0", tk.END)
             
-            # Check if document exists, create if not, update if it does
-            docs = self.storage.list_documents()
+            # Try to update first
+            success, message = self.storage.update_document(self.shared_doc_name, content)
             
-            if self.shared_doc_name not in docs:
-                # Document doesn't exist - create it
+            # If update failed because doc doesn't exist, create it
+            if not success and "not found" in message.lower():
                 success, message = self.storage.create_document(self.shared_doc_name, self.username, content)
-                logger.info(f"Created shared document on manual save")
-            else:
-                # Update existing
-                success, message = self.storage.update_document(self.shared_doc_name, content)
             
             if success:
                 self.last_saved_content = content
