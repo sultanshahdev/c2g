@@ -1,422 +1,227 @@
-# P2PDocs - Peer-to-Peer Collaborative Document Editor
+# P2P CRDT Collaborative Text Editor
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![PyPI version](https://badge.fury.io/py/p2pdocs.svg)](https://badge.fury.io/py/p2pdocs)
+[![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![No Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://github.com/taaha-0548/P2PDocs)
-[![GitHub](https://img.shields.io/badge/GitHub-taaha--0548%2FP2PDocs-black)](https://github.com/taaha-0548/P2PDocs)
 
-A production-ready peer-to-peer collaborative document editor built entirely with Python's standard library. Enable multiple users on a LAN to edit documents simultaneously with real-time synchronization, offline support, and fair lock distribution.
+A peer-to-peer collaborative text editor using **Conflict-free Replicated Data Types (CRDT)**. No central server required - all peers are equal!
 
 ## Features
 
-### Core Capabilities
-- **True P2P Architecture**: No central server required - users connect directly via TCP/UDP
-- **Real-Time Collaboration**: 5-10ms keystroke latency optimized for LAN
-- **Fair Lock Distribution**: FIFO queue prevents user starvation
-- **Offline Support**: Queue edits offline, auto-sync on reconnect
-- **Version History**: Complete edit tracking with author attribution
-- **GUI Editor**: Built-in Tkinter editor with colored cursors
-
-### Technical Highlights
-- **Zero External Dependencies**: Uses only Python stdlib (json, threading, socket, tkinter)
-- **Cross-Platform**: Works on Windows, macOS, Linux
-- **Concurrent Users**: Tested with 4+ simultaneous users
-- **High Performance**: Lock acquisition <1ms, message serialization <1ms
-- **Production Ready**: 57+ comprehensive tests, all passing
+- **True P2P Architecture**: No server needed, all peers are equal
+- **CRDT Synchronization**: Uses RGA (Replicated Growable Array) for conflict-free merging
+- **Real-time Collaboration**: Changes sync instantly across all connected peers
+- **Automatic Peer Discovery**: UDP broadcast for LAN peer detection
+- **Manual Connections**: Connect to peers via IP address
+- **Modern UI**: Clean, professional Tkinter interface
+- **Persistent State**: Document state saved to disk
+- **Batch Operations**: Optimized bulk delete/insert operations
 
 ## Installation
 
-### Via pip (Recommended)
+### From PyPI (when published)
+
 ```bash
 pip install p2pdocs
 ```
 
-### From source
+### From Source
+
 ```bash
-git clone https://github.com/taaha-khan/p2pdocs.git
+git clone https://github.com/yourusername/p2pdocs.git
 cd p2pdocs
 pip install -e .
 ```
 
+## Usage
+
+### Start the Editor
+
+```bash
+# Start with automatic peer discovery
+p2pdocs alice
+
+# Or connect directly to a peer
+p2pdocs bob 192.168.1.100
+```
+
+### Alternative (as Python module)
+
+```bash
+python -m p2pdocs alice
+python -m p2pdocs bob 192.168.1.100
+```
+
+### Programmatic Usage
+
+```python
+from p2pdocs import P2PEditor
+
+# Create and run editor
+editor = P2PEditor(username="alice", peer_ip="192.168.1.100")
+editor.run()
+```
+
+## Version
+
+**Current Version: 1.0.14**
+✅ **Zero Dependencies** — Python 3.8+ stdlib only  
+
 ## Quick Start
 
-### 1. User Management
-
+### Terminal 1: Start Server (Alice)
 ```bash
-# Register users
-p2pdocs register alice password123
-p2pdocs register bob password456
-
-# Login
-p2pdocs login alice password123
+python p2p_crdt_editor.py server alice
+```
+Output:
+```
+[alice] Listening on port 5000...
 ```
 
-### 2. Document Management
-
+### Terminal 2: Start Client (Bob)
 ```bash
-# Create document
-p2pdocs new team-project --content "# Team Project\n\nInitial content"
-
-# List documents
-p2pdocs list
-
-# View document (terminal)
-p2pdocs view team-project
-
-# Delete document
-p2pdocs delete team-project
+python p2p_crdt_editor.py client bob 127.0.0.1
+```
+Output:
+```
+[bob] Connecting to 127.0.0.1:5000...
+[bob] Connected to alice
 ```
 
-### 3. Collaborative Editing
-
-**Terminal 1 (Alice):**
-```bash
-p2pdocs login alice password123
-p2pdocs edit team-project    # Opens GUI editor
-```
-
-**Terminal 2 (Bob):**
-```bash
-p2pdocs login bob password456
-p2pdocs edit team-project    # Joins same document
-```
-
-Both users now see:
-- Each other's real-time edits
-- Colored cursor indicators
-- Lock status and queue position
-- Version history
-
-## CLI Commands
-
-```
-User Management:
-  p2pdocs register <username> <password>    Register a new user
-  p2pdocs login <username> <password>       Login as a user
-  p2pdocs users                             List registered users & LAN peers
-
-Document Management:
-  p2pdocs new <docname> [--content TEXT]    Create a new document
-  p2pdocs view <docname>                    View document in terminal
-  p2pdocs edit <docname>                    Edit document in GUI
-  p2pdocs delete <docname>                  Delete a document
-  p2pdocs list                              List all documents
-```
-
-## Multi-User Collaboration (v1.0.4 NEW!)
-
-### Automatic Peer Discovery
-
-When you login, P2PDocs automatically discovers other users on the same LAN:
-
-```bash
-# Terminal 1 (Alice):
-p2pdocs login alice password123
-
-# Terminal 2 (Bob):
-p2pdocs login bob password456
-
-# Check discovered peers:
-p2pdocs users
-# Output:
-# Users on LAN:
-#   1. bob (192.168.56.1:5000) - CONNECTED
-#   2. charlie (192.168.1.102:5000) - DISCOVERED
-```
-
-### Document Broadcasting
-
-When Alice creates a document, it's automatically shared with all connected peers:
-
-```bash
-# Alice creates document:
-p2pdocs new meeting_notes --content "Q4 Goals"
-# Instantly available to Bob and Charlie!
-
-# Bob can immediately edit it:
-p2pdocs edit meeting_notes
-# Bob edits and saves → Changes sync to Alice and Charlie in real-time
-```
-
-### Real-Time Synchronization
-
-```
-Timeline:
-├─ Alice creates "report" document
-├─ Bob and Charlie receive it via TCP (seconds)
-├─ Bob opens and edits → Alice sees changes instantly
-├─ Charlie updates → Both see changes instantly
-└─ All changes persisted and version-tracked on each machine
-```
-
-### How It Works
-
-1. **Discovery**: UDP broadcast every 5 seconds announces each user's presence
-2. **Connection**: Peers auto-connect via TCP on port 5000
-3. **Broadcasting**: Documents shared automatically when created
-4. **Sync**: Edits broadcast to all connected peers when saved
-5. **Offline**: Changes queued and synced when connection restored
-
-### Network Architecture
-
-```
-Machine A (Alice)         Machine B (Bob)          Machine C (Charlie)
-├─ UDP 5555              ├─ UDP 5555              ├─ UDP 5555
-├─ TCP 5000              ├─ TCP 5000              ├─ TCP 5000
-└─ Storage               └─ Storage               └─ Storage
-    └─ meeting_notes         └─ meeting_notes         └─ meeting_notes
-       (v1: "Q4 Goals")         (v1: "Q4 Goals")         (v1: "Q4 Goals")
-                                   ↓                       ↓
-                              (Bob edits)            (sync received)
-                               (v2: updated)          (v2: updated)
-                                   ↓                       ↓
-                              (Alice sees)           (Charlie sees)
-```
-
-### Tested Scenario
-
-The multi-user workflow has been tested with:
-- ✅ Peer discovery on LAN
-- ✅ Document creation and broadcasting
-- ✅ Multi-user simultaneous editing
-- ✅ Real-time sync across peers
-- ✅ Version tracking across machines
-- ✅ Offline resilience (ready for activation)
+### Start Editing
+- **Alice types** → Bob sees it instantly
+- **Bob types** → Alice sees it instantly
+- Both type simultaneously → **automatic convergence**
 
 ## Architecture
 
-### 10 Implementation Phases
+See [CRDT_ARCHITECTURE.md](./CRDT_ARCHITECTURE.md) for detailed design:
 
-| Phase | Component | Features |
-|-------|-----------|----------|
-| 1 | Auth & Storage | User management, document CRUD, JSON storage |
-| 2 | TCP Networking | P2P communication, message protocol |
-| 3 | Peer Discovery | UDP broadcast, LAN peer discovery |
-| 4 | GUI Editor | Tkinter text editor, real-time updates |
-| 5 | Versioning & ACL | Version history, access control |
-| 6 | Lock Management | Distributed lock coordination |
-| 7 | Keystroke Streaming | Real-time character-by-character sync |
-| 8 | Offline Support | Persistent queue, auto-sync |
-| 9 | Fair Lock Queue | FIFO lock distribution |
-| 10 | Integration Testing | E2E workflows, performance tests |
+- **CRDTId**: Unique operation identifier `(client_id, lamport_clock)`
+- **CRDTElement**: Character + ID + visibility flag
+- **CRDTDocument**: CRDT state machine with merge logic
+- **NetworkManager**: TCP peer connection handler
+- **P2PEditor**: GUI + orchestration layer
 
-### System Components
+## Why CRDT?
 
+| Aspect | Operational Transform (Old) | CRDT (New) |
+|--------|-------|--------|
+| Central server | Required | ❌ Not needed |
+| Transformation logic | Complex | Simple |
+| Concurrent ops | Fragile | Guaranteed safe |
+| Merge order | Critical | Automatic |
+| Convergence | Assumed | **Proven** |
+| Multi-peer | Difficult | Natural |
+
+## How RGA Works
+
+Each character gets a **unique ID**: `(client_id, lamport_clock)`
+
+**Example:**
 ```
-CLI                GUI                 Backend
-  |                 |                    |
-  +--------+--------+                    |
-           |                            |
-       P2PDocs Core                      |
-  (Auth, Storage, Versioning)            |
-           |                            |
-  +--------+--------+                    |
-  |        |        |                   |
-Locking  Sync   Streaming                |
-  |        |        |                   |
-  +--------+--------+                   |
-           |                            |
-      Network Layer                      |
-  (TCP Server, Client, Discovery)        |
-           |                            |
-  +--------+--------+--------+-----------+
-  |                 |
-Other P2PDocs Nodes
+Alice types "H" at pos 0 → ID = (alice-uuid, 1)
+Bob types "i" at pos 0  → ID = (bob-uuid, 1)
+
+Result (sorted by ID): "Hi"  ✅ All peers converge!
 ```
 
-## Data Storage
+Deletions create **tombstones** (not removed), so positions never shift.
 
-Documents and settings stored in:
-- **Linux/Mac**: `~/.p2pdocs/`
-- **Windows**: `%USERPROFILE%\.p2pdocs\`
+## Thread Safety
 
-Structure:
 ```
-~/.p2pdocs/
-├── users/              # User credentials
-├── documents/          # Document content
-├── history/            # Version history
-└── session.json        # Current session
+Main Thread (Tkinter)          Network Thread
+        ↓                            ↓
+   _on_keystroke()          _recv_message()
+        ↓                            ↓
+  doc.insert_local()         doc.insert_remote()
+        ↓                            ↓
+ [doc.lock]◄────────────────[doc.lock]
+        ↓                            ↓
+  _rebuild_text()            root.after(0, _rebuild_text)
 ```
 
-## Security
+**Protected Resources:**
+- `doc.elements` — protected by `doc.lock`
+- `text` widget — protected by `text_lock`
 
-- **Password Hashing**: SHA256 with salt
-- **Session Management**: Token-based sessions
-- **Access Control**: Owner-enforced permissions
-- **No External Auth**: Self-contained system
+## Message Protocol
 
-## Performance
+```json
+{
+  "type": "INSERT",
+  "elements": [
+    {
+      "char_id": {"client_id": "uuid", "lamport_clock": 5},
+      "char": "A",
+      "visible": true
+    }
+  ]
+}
+```
 
-All targets met on LAN (tested with 4+ users):
-
-| Operation | Target | Actual | Status |
-|-----------|--------|--------|--------|
-| Keystroke latency | 5-10ms | 5-8ms | PASS |
-| Lock acquisition | <1ms | <0.5ms | PASS |
-| Message serialization | <1ms | <0.2ms | PASS |
-| Peer discovery | <5s | 2-4s | PASS |
-| Document read | <10ms | 2-5ms | PASS |
+Supported messages:
+- `INSERT` — new character
+- `DELETE` — mark as tombstone
+- `SYNC_REQUEST` — request full state
+- `FULL_SYNC` — send all elements
 
 ## Testing
 
-### Run all tests
-```bash
-pytest tests/ -v
+1. **Type and see sync:**
+   - Alice: type "hello"
+   - Bob: instantly sees "hello"
+
+2. **Concurrent edits:**
+   - Alice types at pos 0
+   - Bob types at pos 0 simultaneously
+   - Both converge to same text
+
+3. **Deletions:**
+   - Alice presses backspace
+   - Bob sees character disappear
+   - Text remains consistent
+
+4. **Multi-line:**
+   - Type newlines, text wraps correctly
+   - All peers sync properly
+
+## Limitations
+
+- Single connection (1 server ↔ 1 client)
+- No persistence (resets on restart)
+- No multi-peer mesh yet
+- No undo/redo support
+
+## Future Work
+
+- [ ] Multi-peer mesh networking
+- [ ] Disk persistence
+- [ ] Operation batching
+- [ ] Compression
+- [ ] Snapshots + garbage collection
+- [ ] Rich text formatting
+- [ ] Presence awareness (cursor position)
+- [ ] Offline support
+
+## Code Structure
+
 ```
-
-### Run specific test module
-```bash
-pytest tests/test_auth.py -v
+p2p_crdt_editor.py (570 lines)
+├── CRDTId ......................... Unique operation ID
+├── CRDTElement .................... Char + metadata
+├── CRDTDocument ................... State machine
+├── NetworkManager ................. TCP networking
+└── P2PEditor ...................... GUI + orchestration
 ```
-
-### Run with coverage
-```bash
-pytest tests/ --cov=p2pdocs --cov-report=html
-```
-
-**Test Results**: 57/57 tests passing
-
-## Use Cases
-
-- **Team Documentation**: Real-time collaborative documentation
-- **Project Planning**: Teams working on shared project docs
-- **Meeting Notes**: Multi-person note-taking during meetings
-- **Offline-First**: Works when users go offline, syncs automatically
-- **Privacy-Focused**: No data sent to external servers
-
-## Development
-
-### Project Structure
-```
-p2pdocs/
-├── __init__.py             # Package initialization
-├── auth.py                 # User authentication & session management
-├── storage.py              # Document storage and persistence
-├── cli.py                  # Command-line interface (8 commands)
-├── gui.py                  # Tkinter GUI editor with real-time updates
-├── versioning.py           # Version history and document tracking
-├── locking.py              # Distributed lock coordination
-├── streaming.py            # Real-time keystroke streaming
-├── sync.py                 # Offline queue and auto-sync
-├── queue.py                # Fair FIFO lock distribution
-└── network/                # P2P networking package
-    ├── __init__.py
-    ├── protocol.py         # Message protocol and serialization
-    ├── server.py           # TCP server for document synchronization
-    ├── client.py           # TCP client for peer connections
-    └── discovery.py        # UDP broadcast peer discovery
-
-Root Configuration:
-├── setup.py                # setuptools configuration
-├── pyproject.toml          # Modern Python project metadata
-├── README.md               # Project documentation
-├── LICENSE                 # MIT License
-├── CONTRIBUTING.md         # Contribution guidelines
-├── MANIFEST.in             # Package distribution manifest
-└── .gitignore              # Git ignore rules
-
-GitHub Automation:
-└── .github/
-    └── workflows/
-        └── publish.yml     # Automated PyPI publishing via OIDC
-```
-
-### Core Modules
-
-- **auth.py**: User registration, login, password hashing with SHA256
-- **storage.py**: JSON-based document storage with file I/O
-- **cli.py**: 8-command interface (register, login, new, view, edit, delete, list, users)
-- **gui.py**: Tkinter editor with colored cursors and real-time collaboration
-- **versioning.py**: Document version tracking and history management
-- **locking.py**: Distributed lock with timeout and FIFO queue
-- **streaming.py**: Character-level keystroke synchronization
-- **sync.py**: Offline queue with reconnection logic
-- **queue.py**: Fair lock distribution (prevents user starvation)
-
-### Network Layer
-
-- **network/protocol.py**: JSON message protocol over TCP
-- **network/server.py**: Multi-client TCP server
-- **network/client.py**: TCP client for peer connections
-- **network/discovery.py**: UDP broadcast for LAN peer discovery
-
-### Adding Features
-
-1. Create a new module in `p2pdocs/`
-2. Add CLI command in `p2pdocs/cli.py` if user-facing
-3. Update `pyproject.toml` if adding dependencies
-4. Test locally before pushing
-
-### Code Quality
-
-- **Style**: Follow PEP 8
-- **Documentation**: Docstrings for all functions and classes
-- **Type Hints**: Use Python type hints where applicable
-- **Testing**: Run tests to verify changes don't break functionality
-
-## Troubleshooting
-
-### "User already exists" error
-This is normal - users persist between sessions. Use `p2pdocs login` instead.
-
-### GUI doesn't open
-Ensure X11 forwarding is enabled if using SSH, or test with `p2pdocs edit` instead.
-
-### Lock timeout errors
-Default lock timeout is 300 seconds. Adjust in `p2pdocs/locking.py` if needed.
-
-### Offline queue not syncing
-Ensure both machines are on the same LAN and firewall allows TCP on port 5000.
 
 ## License
 
-MIT License - See LICENSE file for details
-
-## Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## Documentation
-
-- **PROJECT_ANALYSIS.md**: Complete architecture and design
-- Inline code documentation: Docstrings in all modules
-
-## Performance Tips
-
-- Keep documents under 1MB for best performance
-- Use on local LAN for lowest latency (5-10ms)
-- Grant READ permission when write access not needed
-- Use offline mode for mobile/unreliable connections
-- Monitor lock queue if >10 users waiting
-
-- **Statistics
-
-- **Total Code Size**: ~120 KB (14 Python modules)
-- **Core Modules**: 10 (auth, storage, cli, gui, versioning, locking, streaming, sync, queue, plus network subpackage)
-- **Network Modules**: 4 (protocol, server, client, discovery)
-- **External Dependencies**: 0 (uses only Python stdlib)
-- **Supported Python**: 3.8+
-- **Platforms**: Windows, macOS, Linux
-- **Concurrent Users**: 4+ (design supports more)
-- **Current Version**: 1.0.5
-
-## Support
-
-- Check inline code documentation
-- Review test files for usage examples
-- See PROJECT_ANALYSIS.md for architecture details
-- Email: taaha2004@gmail.com
+MIT License - see LICENSE file for details.
 
 ---
 
-P2PDocs: Simple. Powerful. Distributed.
-
-For peer-to-peer collaboration on local networks.
-
-GitHub: https://github.com/taaha-0548/P2PDocs
+**Status**: ✅ Production-Ready (Single Peer)  
+**Python**: 3.8+  
+**Dependencies**: None (stdlib only)
