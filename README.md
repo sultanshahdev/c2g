@@ -1,42 +1,45 @@
-# P2P CRDT Collaborative Text Editor
+
+# p2pdocs: Peer-to-Peer CRDT Collaborative Editor
 
 [![PyPI version](https://badge.fury.io/py/p2pdocs.svg)](https://badge.fury.io/py/p2pdocs)
 [![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A peer-to-peer collaborative text editor using **Conflict-free Replicated Data Types (CRDT)**. No central server required - all peers are equal!
+**p2pdocs** is a modular, production-ready peer-to-peer collaborative text editor built on Conflict-free Replicated Data Types (CRDTs). It requires no central server—every peer is equal. Designed for reliability, extensibility, and easy packaging (PyPI-ready).
+
 
 ## Features
 
-- **True P2P Architecture**: No server needed, all peers are equal
-- **CRDT Synchronization**: Uses RGA (Replicated Growable Array) for conflict-free merging
-- **Real-time Collaboration**: Changes sync instantly across all connected peers
-- **Automatic Peer Discovery**: UDP broadcast for LAN peer detection
-- **Manual Connections**: Connect to peers via IP address
-- **Modern UI**: Clean, professional Tkinter interface
-- **Persistent State**: Document state saved to disk
-- **Batch Operations**: Optimized bulk delete/insert operations
+- **True Peer-to-Peer**: No server required; all peers are equal
+- **CRDT Synchronization**: RGA (Replicated Growable Array) for conflict-free merging
+- **Real-Time Collaboration**: Instant sync across all connected peers
+- **Automatic Peer Discovery**: UDP broadcast for LAN detection
+- **Manual Peer Connections**: Connect via IP address
+- **Modular Codebase**: Clean separation (CRDT, networking, storage, UI)
+- **Modern Tkinter UI**: Professional, minimal interface
+- **Persistent State**: Document autosave and recovery
+- **Batch Operations**: Efficient bulk insert/delete
+- **PyPI Packaging**: Easy install and upgrade
+
 
 ## Installation
 
-### From PyPI (when published)
-
+### From PyPI
 ```bash
 pip install p2pdocs
 ```
 
 ### From Source
-
 ```bash
-git clone https://github.com/yourusername/p2pdocs.git
+git clone https://github.com/taaha-0548/P2PDocs
 cd p2pdocs
 pip install -e .
 ```
 
-## Usage
 
-### Start the Editor
+## Quick Start
 
+### CLI Usage
 ```bash
 # Start with automatic peer discovery
 p2pdocs alice
@@ -45,100 +48,92 @@ p2pdocs alice
 p2pdocs bob 192.168.1.100
 ```
 
-### Alternative (as Python module)
-
+### Python Module
 ```bash
 python -m p2pdocs alice
 python -m p2pdocs bob 192.168.1.100
 ```
 
 ### Programmatic Usage
-
 ```python
-from p2pdocs import P2PEditor
-
-# Create and run editor
+from p2pdocs.ui.editor import P2PEditor
 editor = P2PEditor(username="alice", peer_ip="192.168.1.100")
 editor.run()
 ```
 
+
 ## Version
 
-**Current Version: 1.0.14**
-✅ **Zero Dependencies** — Python 3.8+ stdlib only  
+**Current Version:** 1.0.14  
+**Dependencies:** None (Python 3.7+ stdlib only)
 
-## Quick Start
 
-### Terminal 1: Start Server (Alice)
-```bash
-python p2p_crdt_editor.py server alice
-```
-Output:
-```
-[alice] Listening on port 5000...
-```
+## Code Structure
 
-### Terminal 2: Start Client (Bob)
-```bash
-python p2p_crdt_editor.py client bob 127.0.0.1
 ```
-Output:
-```
-[bob] Connecting to 127.0.0.1:5000...
-[bob] Connected to alice
+p2pdocs/
+├── crdt/         # CRDT logic (types, document, message)
+├── network/      # TCP/UDP peer discovery & sync
+├── storage/      # Persistence manager
+├── ui/           # Tkinter editor & styles
+├── __main__.py   # CLI entry point
+├── cli.py        # CLI logic
 ```
 
-### Start Editing
-- **Alice types** → Bob sees it instantly
-- **Bob types** → Alice sees it instantly
-- Both type simultaneously → **automatic convergence**
 
-## Architecture
+## Architecture Overview
 
-See [CRDT_ARCHITECTURE.md](./CRDT_ARCHITECTURE.md) for detailed design:
+**CRDT (RGA Algorithm):**
+- `CRDTId`: Unique operation ID `(client_id, lamport_clock)`
+- `CRDTElement`: Character, ID, tombstone flag
+- `CRDTDocument`: State machine, merge logic, topological sort
 
-- **CRDTId**: Unique operation identifier `(client_id, lamport_clock)`
-- **CRDTElement**: Character + ID + visibility flag
-- **CRDTDocument**: CRDT state machine with merge logic
-- **NetworkManager**: TCP peer connection handler
-- **P2PEditor**: GUI + orchestration layer
+**Networking:**
+- `NetworkManager`: TCP peer connections, message sync
+- `PeerDiscovery`: UDP LAN peer detection
+
+**Persistence:**
+- `PersistenceManager`: Async disk I/O
+
+**UI:**
+- `P2PEditor`: Tkinter GUI, event handling
+
 
 ## Why CRDT?
 
-| Aspect | Operational Transform (Old) | CRDT (New) |
-|--------|-------|--------|
-| Central server | Required | ❌ Not needed |
-| Transformation logic | Complex | Simple |
-| Concurrent ops | Fragile | Guaranteed safe |
-| Merge order | Critical | Automatic |
-| Convergence | Assumed | **Proven** |
-| Multi-peer | Difficult | Natural |
+| Aspect                | OT (Old)   | CRDT (New) |
+|-----------------------|------------|------------|
+| Central server        | Required   | ❌ Not needed |
+| Transformation logic  | Complex    | Simple |
+| Concurrent ops        | Fragile    | Safe |
+| Merge order           | Critical   | Automatic |
+| Convergence           | Assumed    | **Proven** |
+| Multi-peer            | Difficult  | Natural |
+
 
 ## How RGA Works
 
-Each character gets a **unique ID**: `(client_id, lamport_clock)`
+Each character is assigned a unique ID `(client_id, lamport_clock)`. Deletions create tombstones (hidden, not removed), so positions never shift. All peers converge automatically.
 
 **Example:**
 ```
 Alice types "H" at pos 0 → ID = (alice-uuid, 1)
 Bob types "i" at pos 0  → ID = (bob-uuid, 1)
-
 Result (sorted by ID): "Hi"  ✅ All peers converge!
 ```
 
-Deletions create **tombstones** (not removed), so positions never shift.
 
 ## Thread Safety
 
 ```
 Main Thread (Tkinter)          Network Thread
-        ↓                            ↓
+     ↓                            ↓
    _on_keystroke()          _recv_message()
-        ↓                            ↓
+     ↓                            ↓
   doc.insert_local()         doc.insert_remote()
-        ↓                            ↓
+     ↓                            ↓
  [doc.lock]◄────────────────[doc.lock]
-        ↓                            ↓
+     ↓                            ↓
   _rebuild_text()            root.after(0, _rebuild_text)
 ```
 
@@ -146,18 +141,19 @@ Main Thread (Tkinter)          Network Thread
 - `doc.elements` — protected by `doc.lock`
 - `text` widget — protected by `text_lock`
 
+
 ## Message Protocol
 
 ```json
 {
-  "type": "INSERT",
-  "elements": [
-    {
-      "char_id": {"client_id": "uuid", "lamport_clock": 5},
-      "char": "A",
-      "visible": true
-    }
-  ]
+   "type": "INSERT",
+   "elements": [
+      {
+         "char_id": {"client_id": "uuid", "lamport_clock": 5},
+         "char": "A",
+         "visible": true
+      }
+   ]
 }
 ```
 
@@ -167,61 +163,52 @@ Supported messages:
 - `SYNC_REQUEST` — request full state
 - `FULL_SYNC` — send all elements
 
+
 ## Testing
 
 1. **Type and see sync:**
    - Alice: type "hello"
    - Bob: instantly sees "hello"
-
 2. **Concurrent edits:**
-   - Alice types at pos 0
-   - Bob types at pos 0 simultaneously
-   - Both converge to same text
-
+   - Both type at the same position
+   - Automatic convergence
 3. **Deletions:**
-   - Alice presses backspace
-   - Bob sees character disappear
-   - Text remains consistent
-
+   - Backspace creates tombstones
+   - All peers update instantly
 4. **Multi-line:**
-   - Type newlines, text wraps correctly
-   - All peers sync properly
+   - Newlines and text wrapping sync correctly
+
 
 ## Limitations
 
 - Single connection (1 server ↔ 1 client)
-- No persistence (resets on restart)
 - No multi-peer mesh yet
 - No undo/redo support
 
-## Future Work
+
+## Roadmap
 
 - [ ] Multi-peer mesh networking
-- [ ] Disk persistence
+- [ ] Advanced disk persistence
 - [ ] Operation batching
 - [ ] Compression
-- [ ] Snapshots + garbage collection
+- [ ] Snapshots & garbage collection
 - [ ] Rich text formatting
-- [ ] Presence awareness (cursor position)
+- [ ] Presence/cursor awareness
 - [ ] Offline support
 
-## Code Structure
 
-```
-p2p_crdt_editor.py (570 lines)
-├── CRDTId ......................... Unique operation ID
-├── CRDTElement .................... Char + metadata
-├── CRDTDocument ................... State machine
-├── NetworkManager ................. TCP networking
-└── P2PEditor ...................... GUI + orchestration
-```
+## License
+
+MIT License — see LICENSE file for details.
 
 ## License
 
 MIT License - see LICENSE file for details.
 
+
 ---
 
-**Status**: ✅ Production-Ready (Single Peer)  
-**Python**: 3.8+  
-**Dependencies**: None (stdlib only)
+**Status:** Production-Ready (Single Peer)
+**Python:** 3.7+
+**Dependencies:** None (stdlib only)
