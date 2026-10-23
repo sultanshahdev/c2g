@@ -3,15 +3,13 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "p2pdocs"
-version = "1.0.14"
-description = "P2P Collaborative Text Editor using CRDT"
+name = "c2g"
+version = "0.1.0"
+description = "Code 2gether — peer-to-peer collaborative text editor using CRDT"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
-authors = [
-    {name = "Muhammad Taaha", email = "taaha2004@gmail.com"}
-]
+authors = [{name = "c2g Contributors"}]
 keywords = ["p2p", "crdt", "collaborative", "editor", "text-editor", "peer-to-peer", "conflict-free"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -30,10 +28,17 @@ classifiers = [
 ]
 
 [project.urls]
-Source = "https://github.com/taaha-0548/P2PDocs"
+Source = "https://github.com/sultanshahdev/c2g"
 
 [project.scripts]
-p2pdocs = "p2pdocs.cli:main"
+c2g = "c2g.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7,<9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.setuptools]
-packages = ["p2pdocs", "p2pdocs.crdt", "p2pdocs.network", "p2pdocs.storage", "p2pdocs.ui"]
+packages = ["c2g", "c2g.crdt", "c2g.network", "c2g.storage", "c2g.ui"]

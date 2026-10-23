@@ -98,6 +98,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv/
 env/
 venv/
 ENV/
@@ -137,3 +138,7 @@ dmypy.json
 # Build artifacts
 *.tar.gz
 *.zip
+
+# Local Graphify index (regenerated from source)
+graphify-out/
+.codex/

@@ -1,5 +1,5 @@
 """
-Main entry point when running as a module: python -m p2pdocs
+Main entry point when running as a module: python -m c2g
 """
 
 from .cli import main

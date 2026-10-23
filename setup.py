@@ -1,5 +1,5 @@
 """
-Setup configuration for p2pdocs package.
+Setup configuration for c2g.
 """
 
 from setuptools import setup, find_packages
@@ -14,14 +14,14 @@ def read_long_description():
         return "A peer-to-peer collaborative text editor using CRDT"
 
 setup(
-    name="p2pdocs",
-    version="1.0.14",
-    author="Your Name",
-    author_email="your.email@example.com",
-    description="P2P Collaborative Text Editor using CRDT",
+    name="c2g",
+    version="0.1.0",
+    author="c2g Contributors",
+    author_email="",
+    description="Code 2gether — peer-to-peer collaborative text editor using CRDT",
     long_description=read_long_description(),
     long_description_content_type="text/markdown",
-    url="https://github.com/taaha-0548/P2PDocs",
+    url="https://github.com/sultanshahdev/c2g",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -45,10 +45,10 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "p2pdocs=p2pdocs.cli:main",
+            "c2g=c2g.cli:main",
         ],
     },
     project_urls={
-        "Source": "https://github.com/taaha-0548/P2PDocss"
+        "Source": "https://github.com/sultanshahdev/c2g"
     },
 )

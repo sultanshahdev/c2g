@@ -1,5 +1,5 @@
 """
-Command-line interface for P2P CRDT Editor.
+Command-line interface for c2g — Code 2gether.
 """
 
 import sys
@@ -9,10 +9,10 @@ def parse_args():
     """Parse command-line arguments."""
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Start with discovery: p2pdocs <username>")
-        print("  Connect to peer: p2pdocs <username> <peer_ip>")
+        print("  Start with discovery: c2g <username>")
+        print("  Connect to peer: c2g <username> <peer_ip>")
         print("\nAlternative:")
-        print("  python -m p2pdocs <username> [<peer_ip>]")
+        print("  python -m c2g <username> [<peer_ip>]")
         sys.exit(1)
     
     username = sys.argv[1]
@@ -27,7 +27,7 @@ def main():
     
     from .ui import P2PEditor
     
-    print(f"Starting P2P CRDT Editor for user: {username}")
+    print(f"Starting c2g — Code 2gether for user: {username}")
     if peer_ip:
         print(f"Connecting to peer: {peer_ip}")
     

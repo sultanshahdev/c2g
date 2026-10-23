@@ -1,3 +1,3 @@
 include README.md
 include LICENSE
-recursive-include p2pdocs *.py
+recursive-include c2g *.py

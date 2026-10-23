@@ -28,7 +28,7 @@ class P2PEditor:
         self.discovered_peers = {}
         
         self.root = tk.Tk()
-        self.root.title(f"P2P CRDT Editor - {self.username}")
+        self.root.title(f"c2g — Code 2gether - {self.username}")
         self.root.geometry("1100x700")
         self.root.configure(bg="#F0F2F5")
         
@@ -68,7 +68,7 @@ class P2PEditor:
                              bg=styles.PRIMARY, fg="white", width=3, height=1)
         icon_label.pack(side=tk.LEFT, padx=(0, 10))
         
-        title_label = tk.Label(left_header, text="Collaborative Editor", 
+        title_label = tk.Label(left_header, text="c2g — Code 2gether",
                               font=("Arial", 12, "bold"), bg="white", fg=styles.TEXT_DARK)
         title_label.pack(side=tk.LEFT)
         
