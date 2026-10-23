@@ -51,13 +51,14 @@ class PersistenceManager:
         except Exception as e:
             print(f"[PERSIST] Sync error: {e}")
     
-    def save_state(self, elements_data: Dict, applied_ops: Set, lamport_clock: int):
+    def save_state(self, elements_data: Dict, applied_ops: Set, lamport_clock: int, pending_deletes=None):
         """Queue state for async write. If queue full, drops oldest (we have latest)."""
         try:
             state = {
                 "elements": elements_data,
                 "applied_ops": applied_ops,
                 "lamport_clock": lamport_clock,
+                "pending_deletes": pending_deletes or [],
                 "timestamp": time.time()
             }
             # Try non-blocking first

@@ -19,7 +19,7 @@ class MemoryPersistence:
     def load_state(self):
         return None
 
-    def save_state(self, elements_data, applied_ops, lamport_clock):
+    def save_state(self, elements_data, applied_ops, lamport_clock, pending_deletes=None):
         pass
 
 

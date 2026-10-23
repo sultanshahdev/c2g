@@ -53,7 +53,7 @@ flowchart LR
 
 ## M1 — CRDT convergence, causal handling and state correctness
 
-**Complexity:** High. **Depends:** M0. **Gate:** G1.
+**Complexity:** High. **Completed:** 2026-10-23. **Gate:** G1 PASS.
 **Expected changes:** `c2g/crdt/document.py`, `types.py`, possibly `message.py`, core-only tests in `tests/test_crdt_*.py`; model-state format planning; avoid UI work.
 
 **Tasks:**
@@ -171,7 +171,7 @@ flowchart LR
 | Milestone | Status | Last completed evidence | Next step |
 |---|---|---|---|
 | M0 | COMPLETE — G0 PASS | Six passing characterization tests; six strict expected failures; restored and aligned planning records | Await explicit authorization for M1 |
-| M1 | NOT STARTED | Identified F1–F8 in source | Wait for M0/G0 |
+| M1 | COMPLETE — G1 PASS | 22 passing CRDT tests, including 100 deterministic three-replica histories | Await explicit authorization for M2 |
 | M2 | NOT STARTED | Identified NET-F1..F10 | Wait for M1/G1 |
 | M3 | NOT STARTED | Official Monaco/pywebview API docs reviewed | Confirm supported OS targets before spike |
 | M4 | NOT STARTED | Proposed JS/Python contract | Wait for M1–M3 |
@@ -181,7 +181,7 @@ flowchart LR
 
 ## Next precise Codex task after explicit approval
 
-> **Do not begin M1 without explicit approval.** M0 is complete. The next approved
-> task must be bounded to M1 and begin by reviewing the G0 evidence, these plans,
-> Graphify, and the CRDT source/tests. Do not migrate the UI, install frontend
-> dependencies, or make M2+ changes as part of that work.
+> **Do not begin M2 without explicit approval.** M1 is complete. The next approved
+> task must be bounded to M2 and begin by reviewing the G1 evidence, these plans,
+> Graphify, and the network/CRDT boundary. Do not migrate the UI, install frontend
+> dependencies, or make M3+ changes as part of that work.

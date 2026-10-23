@@ -7,7 +7,7 @@ This module defines the core data structures for the CRDT implementation:
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,12 @@ class CRDTId:
     """Globally unique operation ID: (client_id, lamport_clock)"""
     client_id: str
     lamport_clock: int
+
+    def __post_init__(self):
+        if not isinstance(self.client_id, str) or not self.client_id or len(self.client_id) > 128:
+            raise ValueError("client_id must be a non-empty string of at most 128 characters")
+        if isinstance(self.lamport_clock, bool) or not isinstance(self.lamport_clock, int) or self.lamport_clock < 0:
+            raise ValueError("lamport_clock must be a non-negative integer")
     
     def __lt__(self, other):
         """Total ordering for deterministic merge."""
@@ -34,6 +40,15 @@ class CRDTElement:
     char: str
     after_id: Optional[CRDTId] = None  # Element ID this was inserted after (None = start)
     visible: bool = True
+    before_id: Optional[CRDTId] = None
+
+    def __post_init__(self):
+        if not isinstance(self.char, str) or len(self.char) != 1:
+            raise ValueError("char must contain exactly one Python Unicode code point")
+        if not isinstance(self.visible, bool):
+            raise ValueError("visible must be a boolean")
+        if self.after_id == self.char_id or self.before_id == self.char_id:
+            raise ValueError("an element cannot reference itself")
     
     def to_dict(self):
         """Serialize to dictionary."""
@@ -44,11 +59,15 @@ class CRDTElement:
                 "client_id": self.after_id.client_id,
                 "lamport_clock": self.after_id.lamport_clock
             } if self.after_id else None,
-            "visible": self.visible
+            "visible": self.visible,
+            "before_id": {
+                "client_id": self.before_id.client_id,
+                "lamport_clock": self.before_id.lamport_clock
+            } if self.before_id else None,
         }
     
     @staticmethod
-    def from_dict(d):
+    def from_dict(d: Dict[str, Any]):
         """Deserialize from dict with robust error handling."""
         try:
             # Validate required fields
@@ -80,8 +99,16 @@ class CRDTElement:
                 if "client_id" not in after_id_dict or "lamport_clock" not in after_id_dict:
                     raise KeyError("after_id missing client_id or lamport_clock")
                 after_cid = CRDTId(after_id_dict["client_id"], after_id_dict["lamport_clock"])
+            before_cid = None
+            if d.get("before_id"):
+                before_id_dict = d["before_id"]
+                if not isinstance(before_id_dict, dict):
+                    raise ValueError(f"before_id must be dict, got {type(before_id_dict)}")
+                if "client_id" not in before_id_dict or "lamport_clock" not in before_id_dict:
+                    raise KeyError("before_id missing client_id or lamport_clock")
+                before_cid = CRDTId(before_id_dict["client_id"], before_id_dict["lamport_clock"])
             
-            return CRDTElement(char_id=cid, char=d["char"], after_id=after_cid, visible=d["visible"])
+            return CRDTElement(char_id=cid, char=d["char"], after_id=after_cid, visible=d["visible"], before_id=before_cid)
         except (KeyError, ValueError, TypeError) as e:
             print(f"[CRDT] Error deserializing element: {e}, data={d}")
             raise
