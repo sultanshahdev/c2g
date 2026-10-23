@@ -14,7 +14,17 @@ M0 — Baseline and Agent-Ready Development Foundation: **COMPLETE (G0 PASS)**.
 M1 — CRDT Convergence, Causal Handling, and State Correctness: **COMPLETE (G1
 PASS)**. c2g was rebranded locally while retaining P2PDocs historical-source
 references and attribution. Original history remains on `main` at `5bf7a3b`.
-M2 has not started and requires explicit authorization.
+M2 — Reliable peer connectivity and state exchange: **PARTIAL (automated G2
+evidence complete; manual GUI/LAN smoke outstanding)**. Protocol v2 now has
+framed HELLO negotiation, process-local UUID peer identity, explicit document
+UUID join semantics, target-session snapshots plus a bounded sync-window replay
+buffer, bounded relay de-duplication, configurable/ephemeral ports, capped
+inbound handshakes, and local-receipt LAN discovery records. Tk receives all
+network/discovery events via a main-thread queue and lists discovered endpoints
+with explicit Connect actions. `tests/test_network_m2.py` has eight loopback /
+headless tests; the full suite reports **30 passed**. G2 remains PARTIAL solely
+because manual two-instance Tk/LAN discovery verification was not executable
+in this environment. M3 remains unstarted.
 
 ## Development environment
 

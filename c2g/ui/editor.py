@@ -8,6 +8,7 @@ import threading
 import time
 import hashlib
 import uuid
+import queue
 from datetime import datetime
 
 from ..crdt import CRDTDocument, CRDTMessage, CRDTElement, CRDTId
@@ -18,14 +19,18 @@ from . import styles
 class P2PEditor:
     """True P2P CRDT editor - all peers are equal."""
     
-    def __init__(self, username: str, peer_ip: str = None):
+    def __init__(self, username: str, peer_ip: str = None, listen_port: int = 5000):
         self.username = username
         self.client_id = str(uuid.uuid4())
         # Always start with fresh document (start_fresh=True by default)
         self.doc = CRDTDocument(self.client_id, doc_name="collaborative_doc", start_fresh=True)
-        self.net = NetworkManager(username)
-        self.discovery = PeerDiscovery(username)
+        self.document_id = str(uuid.uuid4())
+        self.net = NetworkManager(username, listen_port, document_id=self.document_id,
+                                  state_provider=self.doc.get_full_state,
+                                  is_document_empty=lambda: not self.doc.elements)
+        self.discovery = PeerDiscovery(username, peer_id=self.net.peer_id)
         self.discovered_peers = {}
+        self.network_events = queue.Queue()
         
         self.root = tk.Tk()
         self.root.title(f"c2g — Code 2gether - {self.username}")
@@ -39,10 +44,12 @@ class P2PEditor:
         
         # Start listening for incoming connections
         self.net.on_message = self._on_network_message
+        self.net.on_event = lambda kind, data: self.network_events.put((kind, data))
         self.net.start_listening()
+        self.root.after(100, self._drain_network_events)
         
         # Start discovery
-        threading.Thread(target=self.discovery.start_broadcast, args=(5000,), daemon=True).start()
+        threading.Thread(target=self.discovery.start_broadcast, args=(self.net.port,), daemon=True).start()
         threading.Thread(target=self._discovery_monitor, daemon=True).start()
         
         # If peer_ip provided, connect to it
@@ -281,15 +288,29 @@ class P2PEditor:
         """Monitor discovered peers and update UI."""
         while self.running:
             try:
-                peers = self.discovery.get_peers()
-                
-                # Update UI
-                self.root.after(0, self._update_peer_lists)
+                self.discovered_peers = self.discovery.get_peers()
+                self.network_events.put(("discovery_changed", {}))
                 
                 time.sleep(2)
             except Exception as e:
                 print(f"[{self.username}] Discovery monitor error: {e}")
                 time.sleep(2)
+
+    def _drain_network_events(self):
+        """Only this Tk-main-thread callback touches network UI state."""
+        changed = False
+        try:
+            while True:
+                kind, data = self.network_events.get_nowait(); changed = True
+                if kind in ("peer_connected", "sync_complete", "peer_disconnected", "peer_rejected", "connection_error"):
+                    detail = data.get("error", "")
+                    label = {"peer_connected":"Connecting", "sync_complete":"Synced", "peer_disconnected":"Disconnected",
+                             "peer_rejected":"Rejected", "connection_error":"Connection failed"}.get(kind, kind)
+                    self.sync_status_label.config(text=f"{label}{': ' + detail if detail else ''}")
+        except queue.Empty:
+            pass
+        if changed: self._update_peer_lists()
+        if self.running: self.root.after(100, self._drain_network_events)
     
     def _update_peer_lists(self):
         """Update the peers list in the sidebar."""
@@ -308,7 +329,8 @@ class P2PEditor:
                     no_peers.pack(pady=20)
                 else:
                     # Show connected peers
-                    for idx, (peer_id, (_, username, _)) in enumerate(list(self.net.peers.items())):
+                    for idx, (peer_id, session) in enumerate(list(self.net.peers.items())):
+                        username = session.username
                         # Create peer card
                         is_first = (idx == 0)
                         peer_frame = tk.Frame(self.peers_list_frame, 
@@ -339,6 +361,18 @@ class P2PEditor:
                                             bg=styles.BG_HIGHLIGHT if is_first else "#fcfcfc", 
                                             fg=styles.TEXT_DARK, anchor="w")
                         name_label.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
+
+            # Discovery is intentionally separate: receiving an announcement
+            # never opens a session. The button is the explicit join action.
+            connected = set(self.net.peers)
+            for peer_id, (username, port, _seen, host) in sorted(self.discovered_peers.items()):
+                if peer_id in connected:
+                    continue
+                frame = tk.Frame(self.peers_list_frame, bg="#fcfcfc")
+                frame.pack(fill=tk.X, padx=5, pady=2)
+                tk.Label(frame, text=f"{username} (discovered {host}:{port})", font=("Arial", 8), bg="#fcfcfc",
+                         fg=styles.TEXT_GRAY, anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6, pady=6)
+                tk.Button(frame, text="Connect", font=("Arial", 8), command=lambda h=host, p=port: self._connect_discovered(h, p)).pack(side=tk.RIGHT, padx=4)
             
             # Update header stats
             self.peers_status_label.config(text=f"Connected to {peer_count} Peer{'s' if peer_count != 1 else ''}")
@@ -349,18 +383,23 @@ class P2PEditor:
     def _connect_to_peer(self, peer_ip: str):
         """Connect to peer."""
         time.sleep(1)
-        self.net.connect_to_peer(peer_ip)
+        host, sep, raw_port = peer_ip.rpartition(":")
+        self.net.connect_to_peer(host if sep else peer_ip, int(raw_port) if sep else 5000)
     
     def _manual_connect(self):
         """Connect to manually entered IP."""
         ip = self.ip_entry.get().strip()
         if ip and ip != "Enter peer IP address...":
             print(f"[{self.username}] Manually connecting to {ip}")
-            threading.Thread(target=self.net.connect_to_peer, args=(ip,), daemon=True).start()
+            threading.Thread(target=self._connect_to_peer, args=(ip,), daemon=True).start()
             self.ip_entry.delete(0, tk.END)
             self.ip_entry.insert(0, "Enter peer IP address...")
         else:
             messagebox.showwarning("No IP", "Please enter an IP address to connect.")
+
+    def _connect_discovered(self, host, port):
+        self.sync_status_label.config(text=f"Connecting to {host}:{port}")
+        threading.Thread(target=self.net.connect_to_peer, args=(host, port), daemon=True).start()
     
     def _on_cursor_move(self, event=None):
         """Handle cursor movement (arrow keys, mouse clicks, etc)."""

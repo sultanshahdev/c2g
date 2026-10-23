@@ -84,7 +84,7 @@ flowchart LR
 6. Keep UDP broadcast discovery but provide explicit click-to-connect using advertised port; test stale/duplicate peers. Do not infer automatic connection from discovery.
 7. Add two-peer, A↔B↔C, disconnect/rejoin, fragmentation/coalescing and invalid-frame tests with temporary distinct ports.
 
-**Acceptance:** New peer sees an existing document; all 3 peers converge after A modifies while C is disconnected then C rejoins; malformed peer cannot kill app; every operation forwarded once (for chosen topology); old protocol rejection is deterministic and documented; manual IP works. **Done:** G2 reports test evidence and TCP/UDP LAN limitations.
+**Acceptance:** New peer sees an existing document; all 3 peers converge after A modifies while C is disconnected then C rejoins; malformed peer cannot kill app; every operation forwarded once (for chosen topology); old protocol rejection is deterministic and documented; manual IP works. **Status (2026-10-23): PARTIAL.** Automated protocol/session/sync/relay/discovery evidence is implemented (30 total tests); manual two-instance Tk plus physical-LAN discovery smoke remains required before G2 can pass. See `M2_NETWORK_RELIABILITY_REPORT.md`.
 
 ## M3 — Monaco + pywebview feasibility spike (throwaway or isolated branch)
 

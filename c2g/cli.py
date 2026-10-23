@@ -2,28 +2,23 @@
 Command-line interface for c2g — Code 2gether.
 """
 
-import sys
+import argparse
 
 
 def parse_args():
     """Parse command-line arguments."""
-    if len(sys.argv) < 2:
-        print("Usage:")
-        print("  Start with discovery: c2g <username>")
-        print("  Connect to peer: c2g <username> <peer_ip>")
-        print("\nAlternative:")
-        print("  python -m c2g <username> [<peer_ip>]")
-        sys.exit(1)
-    
-    username = sys.argv[1]
-    peer_ip = sys.argv[2] if len(sys.argv) > 2 else None
-    
-    return username, peer_ip
+    parser = argparse.ArgumentParser(description="c2g trusted-LAN collaborative editor")
+    parser.add_argument("username")
+    parser.add_argument("peer", nargs="?", help="peer host or host:port")
+    parser.add_argument("--listen-port", type=int, default=5000)
+    args = parser.parse_args()
+    if not 0 <= args.listen_port <= 65535: parser.error("listen port must be 0..65535")
+    return args.username, args.peer, args.listen_port
 
 
 def main():
     """Main entry point for CLI."""
-    username, peer_ip = parse_args()
+    username, peer_ip, listen_port = parse_args()
     
     from .ui import P2PEditor
     
@@ -31,7 +26,7 @@ def main():
     if peer_ip:
         print(f"Connecting to peer: {peer_ip}")
     
-    editor = P2PEditor(username, peer_ip)
+    editor = P2PEditor(username, peer_ip, listen_port)
     editor.run()
 
 
