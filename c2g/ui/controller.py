@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional
 
 from ..crdt import CRDTDocument, CRDTElement, CRDTId, CRDTMessage
 from ..network import NetworkManager, PeerDiscovery
+from ..storage.recovered_document import PersistedCrdt
 
 
 def utf16_to_codepoint(text: str, offset: int) -> int:
@@ -52,20 +53,25 @@ class ApplicationController:
 
     def __init__(self, username: str, listen_port: int = 5000, *, client_id: Optional[str] = None,
                  document_id: Optional[str] = None, start_network: bool = False,
-                 start_discovery: bool = False):
+                 start_discovery: bool = False, persisted: Optional[PersistedCrdt] = None):
         self.username = username
         self.lock = threading.RLock()
         self.running = True
         self.version = 1  # Authoritative text version, distinct from Monaco versionId.
         self.seen_transactions = set()
         self.ui_dispatch: Optional[Callable[[Dict[str, Any]], None]] = None
-        self.document = CRDTDocument(client_id or str(uuid.uuid4()), doc_name="collaborative_doc", start_fresh=True)
-        self.network = NetworkManager(username, listen_port, document_id=document_id or str(uuid.uuid4()),
+        self.persisted = persisted
+        self.save_status, self.save_error = ("saved", None) if persisted else ("unsaved", None)
+        if persisted:
+            persisted.set_status_callback(self._on_save_status)
+        self.document = persisted.document if persisted else CRDTDocument(client_id or str(uuid.uuid4()), doc_name="collaborative_doc", start_fresh=True)
+        self.network = NetworkManager(username, listen_port, document_id=(persisted.document_id if persisted else document_id or str(uuid.uuid4())),
                                       state_provider=self.document.get_full_state,
                                       is_document_empty=lambda: not self.document.elements)
         self.discovery = PeerDiscovery(username, peer_id=self.network.peer_id)
         self.network.on_message = self._on_network_message
         self.network.on_event = self._on_network_event
+        self.network.on_document_id_changed = self._persist_joined_document_id
         self.discovery_started = False
         if start_network:
             self.start(start_discovery=start_discovery)
@@ -73,6 +79,17 @@ class ApplicationController:
     @property
     def document_id(self):
         return self.network.document_id
+
+    def _on_save_status(self, state: str, error: Optional[str]) -> None:
+        with self.lock:
+            self.save_status, self.save_error = state, error
+        self._notify({"type": "save_status", "state": state, "error": error})
+
+    def _persist_joined_document_id(self, document_id: str) -> None:
+        if self.persisted is None:
+            return
+        with self.lock:
+            self.persisted.update_document_id(document_id)
 
     def start(self, *, start_discovery: bool = True) -> bool:
         if not self.network.start_listening():
@@ -97,7 +114,8 @@ class ApplicationController:
         with self.lock:
             return {"text": self.document.get_text(), "version": self.version,
                     "language": "python", "document_id": self.document_id,
-                    "ui_state": self.ui_state()}
+                    "ui_state": self.ui_state(), "save_status": self.save_status,
+                    "save_error": self.save_error}
 
     def ui_state(self) -> Dict[str, Any]:
         with self.network.peers_lock:
@@ -108,7 +126,8 @@ class ApplicationController:
                       for peer_id, value in self.discovery.get_peers().items()
                       if peer_id not in {peer["peer_id"] for peer in connected}]
         return {"connected": connected, "discovered": discovered,
-                "listen_port": self.network.port, "document_id": self.document_id}
+                "listen_port": self.network.port, "document_id": self.document_id,
+                "save_status": self.save_status, "save_error": self.save_error}
 
     def _on_network_event(self, kind: str, data: Dict[str, Any]) -> None:
         self._notify({"type": "network", "kind": kind, "data": data, "ui_state": self.ui_state()})
@@ -247,4 +266,7 @@ class ApplicationController:
             self.running = False
         self.discovery.stop()
         self.network.close()
-        self.document.persistence.stop()
+        if self.persisted:
+            self.persisted.close()
+        else:
+            self.document.persistence.stop()

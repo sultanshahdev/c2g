@@ -12,6 +12,10 @@ const editor = monaco.editor.create(document.querySelector('#editor'), {
 });
 const model = editor.getModel();
 function status(text) { state.textContent = text; versionEl.textContent = `CRDT v${pythonVersion}`; }
+function saveStatus(value, error) { status(value === 'saving' ? 'Saving…' : value === 'saved' ? 'Saved locally' : `Save failed${error ? `: ${error}` : ''}`); }
+function showPicker(data) { const picker=document.querySelector('#picker'), recent=document.querySelector('#recent-documents'); picker.hidden=false; recent.replaceChildren(...(data.documents||[]).map(item=>{const row=document.createElement('div');row.className='recent';const text=document.createElement('span');text.textContent=item.corrupt ? `${item.name} — unavailable (recovery needed)` : `${item.name} — ${item.last_saved ? new Date(item.last_saved*1000).toLocaleString() : 'never saved'}`;row.append(text);if(!item.corrupt){const button=document.createElement('button');button.textContent='Resume';button.onclick=()=>choose(window.pywebview.api.resume_document(item.storage_key));row.append(button);}return row;})); }
+async function choose(call) { const result=await call; if(!result.accepted){status(result.reason||'Could not open document');return;} document.querySelector('#picker').hidden=true; activate(result); }
+function activate(initial) { applyingRemote=true; model.setValue(initial.text); applyingRemote=false; pythonVersion=initial.version; ready=true; renderPeers(initial.ui_state); document.querySelector('#document').textContent=initial.document_id; saveStatus(initial.save_status, initial.save_error); }
 function renderPeers(ui) { const add=(id,items,connect)=>{const root=document.querySelector(id);root.replaceChildren(...items.map(item=>{const row=document.createElement('div');row.className='peer';row.textContent=`${item.username} — ${item.state||item.endpoint||`${item.host}:${item.port}`}`;const button=document.createElement('button');button.textContent=connect?' Connect':' Disconnect';button.onclick=async()=>{const result=connect?await window.pywebview.api.connect_discovered(item.host,item.port):await window.pywebview.api.disconnect_peer(item.peer_id);status(result.accepted?(result.status||'Connecting'):result.reason);};row.append(button);return row;}));};add('#connected',ui.connected||[],false);add('#discovered',ui.discovered||[],true);document.querySelector('#peers').textContent=`${(ui.connected||[]).length} Peers`;}
 function applyPatch(patch) {
   applyingRemote = true;
@@ -24,10 +28,12 @@ model.onDidChangeContent(event=>{if(applyingRemote||!ready)return;pending.push({
 editor.onDidChangeCursorPosition(e => position.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`);
 window.addEventListener('pywebviewready', async () => {
   const initial = await window.pywebview.api.editor_ready();
-  applyingRemote = true; model.setValue(initial.text); applyingRemote = false;
-  pythonVersion = initial.version; ready = true; renderPeers(initial.ui_state); document.querySelector('#document').textContent=initial.document_id; status('Ready');
+  if(initial.picker){ showPicker(initial.picker); return; }
+  if(!initial.accepted && initial.reason){ status(initial.reason); return; }
+  activate(initial);
   window.c2gApplyRemotePatch = payload => { applyPatch(payload.patch); pythonVersion = payload.version; status('Remote patch applied'); };
 });
-window.c2gReceive=payload=>{if(payload.type==='remote_patch')window.c2gApplyRemotePatch(payload);else if(payload.type==='network'){renderPeers(payload.ui_state);status(payload.kind.replaceAll('_',' '));}};
+window.c2gReceive=payload=>{if(payload.type==='remote_patch')window.c2gApplyRemotePatch(payload);else if(payload.type==='network'){renderPeers(payload.ui_state);status(payload.kind.replaceAll('_',' '));}else if(payload.type==='save_status')saveStatus(payload.state,payload.error);};
 document.querySelector('#connect-form').addEventListener('submit',async event=>{event.preventDefault();const result=await window.pywebview.api.connect(document.querySelector('#endpoint').value);status(result.accepted?(result.status||'Connecting'):result.reason);});
 document.querySelector('#save').onclick=async()=>{const result=await window.pywebview.api.export_document();status(result.accepted?`Exported ${result.path}`:`Export failed: ${result.reason}`);};
+document.querySelector('#new-document').onclick=()=>choose(window.pywebview.api.create_document('Untitled'));

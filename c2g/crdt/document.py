@@ -21,7 +21,7 @@ class CRDTDocument:
     MAX_PENDING = 20_000
     MAX_SNAPSHOT_ELEMENTS = 100_000
 
-    def __init__(self, client_id: str, doc_name: str = "collaborative_doc", start_fresh: bool = True):
+    def __init__(self, client_id: str, doc_name: str = "collaborative_doc", start_fresh: bool = True, persistence_backend=None):
         self.client_id = CRDTId(client_id, 0).client_id
         self.doc_name = doc_name
         self.lamport_clock = 0
@@ -33,7 +33,7 @@ class CRDTDocument:
         self.pending_by_predecessor: Dict[CRDTId, Set[CRDTId]] = defaultdict(set)
         self._resolved_ids: Set[CRDTId] = set()
         self.lock = threading.RLock()
-        self.persistence = PersistenceManager(doc_name)
+        self.persistence = persistence_backend or PersistenceManager(doc_name)
         if start_fresh:
             self.persistence.clear()
         else:

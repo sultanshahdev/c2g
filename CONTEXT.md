@@ -38,6 +38,13 @@ outstanding. See `docs/M4_DESKTOP_INTEGRATION_REPORT.md`.
 M4 also includes an explicit Disconnect Peer control backed by M2's guarded
 session cleanup; automated loopback tests cover disconnect, independent offline
 edits including tombstones, and explicit reconnect convergence.
+M5 — Safe Persistence and Recovery: **PARTIAL (M5-C implemented)**. A separate,
+strictly validated versioned JSON store with atomic replace and backup recovery
+now exists. M5-B adds opt-in `PersistedCrdt` creation/recovery preserving CRDT,
+document, and replica identity state. M5-C wires this into Monaco with
+New/Resume selection, coalesced autosave, per-replica process locks, persisted
+post-join document IDs, and final shutdown flush. See
+`docs/M5_PERSISTENCE_RECOVERY_REPORT.md`.
 
 ## Development environment
 
@@ -59,7 +66,7 @@ edits including tombstones, and explicit reconnect convergence.
 
 Run `./.venv/bin/python -m pytest -q` (or
 `python -m pytest -q` with the virtual environment activated). M3 verification
-result: **40 passed**. Fixtures replace `PersistenceManager` in the document module
+result: **46 passed**. Fixtures replace `PersistenceManager` in the document module
 with an in-memory double, so tests create no persistence workers or user-state
 files. The historical six regressions are now normal passing tests.
 

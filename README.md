@@ -6,10 +6,8 @@ P2PDocs project; its original Git history and license are retained.
 
 ## Status
 
-This repository is in an early modernization stage. The M0 test baseline is
-established, but six known CRDT correctness defects remain intentionally marked
-as strict expected failures pending M1. It must not be represented as
-production-ready.
+M5-C persistence integration is implemented, but this remains pre-release:
+M5-D packaging and native multi-window verification are outstanding.
 
 ## Installation
 
@@ -28,6 +26,8 @@ No package has been published under the c2g identity.
 ```bash
 c2g alice
 c2g bob 192.168.1.100
+c2g alice --new
+c2g alice --resume <storage-key>
 
 python -m c2g alice
 python -m c2g bob 192.168.1.100
@@ -39,9 +39,7 @@ python -m c2g bob 192.168.1.100
 python -m pytest -q
 ```
 
-The expected M0 baseline is `6 passed, 6 xfailed`. The tests use an in-memory
-persistence substitute and do not open Tkinter windows or make network
-connections.
+The current automated baseline is `51 passed`.
 
 ## Structure
 
@@ -55,10 +53,10 @@ c2g/
 
 ## Compatibility notes
 
-The application currently keeps the historical `~/.p2p_crdt/` persistence
-location and existing network message types unchanged. The persisted state is
-currently pickle-based; do not load untrusted files. A data/path migration is
-deferred to M5, and protocol versioning is deferred to M2.
+Normal startup presents New/Resume selection. Monaco replicas autosave validated
+JSON state below `~/.c2g`, show completed save status, and never load legacy
+pickle state. Corrupt states are preserved; a validated backup is attempted
+before resume fails.
 
 ## Attribution and license
 

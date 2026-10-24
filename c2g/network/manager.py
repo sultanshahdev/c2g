@@ -56,7 +56,7 @@ class NetworkManager:
         self.document_id = document_id or str(uuid.uuid4()); self.state_provider = state_provider
         self.is_document_empty = is_document_empty or (lambda: True)
         self.peers: Dict[str, PeerSession] = {}; self.peers_lock = threading.RLock(); self.server_socket = None
-        self.running = True; self.on_message = None; self.on_event = None; self._seen = OrderedDict(); self._handshakes = 0
+        self.running = True; self.on_message = None; self.on_event = None; self.on_document_id_changed = None; self._seen = OrderedDict(); self._handshakes = 0
     def _event(self, kind, **data):
         if self.on_event:
             try: self.on_event(kind, data)
@@ -125,7 +125,17 @@ class NetworkManager:
                 self._reject(conn, "document mismatch; explicit empty-document join required"); raise ProtocolError("document mismatch")
             # The explicit join initiator adopts the existing peer's logical ID;
             # the receiving peer remains authoritative for this join.
-            if mismatch and outgoing: self.document_id = hello["document_id"]
+            if mismatch and outgoing:
+                # Only after a valid HELLO has authorized the empty join do we
+                # publish the identity transition to the persistence owner.
+                old_document_id = self.document_id
+                self.document_id = hello["document_id"]
+                try:
+                    if self.on_document_id_changed:
+                        self.on_document_id_changed(self.document_id)
+                except Exception:
+                    self.document_id = old_document_id
+                    raise ProtocolError("could not persist joined document identity")
             session = PeerSession(conn, hello["peer_id"], hello["username"], f"{host}:{hello['listen_port']}", outgoing)
             with self.peers_lock:
                 old = self.peers.get(session.peer_id); preferred_outgoing = self.peer_id < session.peer_id

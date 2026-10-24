@@ -121,7 +121,7 @@ flowchart LR
 
 ## M5 — Safe persistence + Python metadata hygiene
 
-**Complexity:** Medium. **Depends:** core state schema M1; UI join identity M2; may be developed ahead of M4 if valuable. **Gate:** G5.
+**Complexity:** Medium. **Depends:** core state schema M1; UI join identity M2; may be developed ahead of M4 if valuable. **Gate:** G5. **Status (2026-10-24): PARTIAL.** M5-C integrates the validated JSON replica lifecycle into Monaco: explicit New/Resume selection, coalesced asynchronous autosave with completed-save status, process ownership locks, shutdown flush, and persisted post-join document identity. M5-D packaging and native/manual evidence remain.
 **Expected changes:** `c2g/storage/persistence.py`, CRDT load/save boundaries, CLI/config, `pyproject.toml`, `setup.py`, tests and user docs.
 
 **Tasks:**
