@@ -68,3 +68,51 @@ than substituting an empty document on failure. Mutations persist through the
 JSON backend synchronously; two independently restored replicas converged after
 further full-state exchange. This path never invokes the legacy persistence
 backend.
+
+## M5-D packaging and lifecycle verification
+
+`pyproject.toml` is canonical: c2g 0.1.0 requires Python 3.12+, uses PEP 639
+MIT / `LICENSE` metadata, retains P2PDocs attribution, declares no core runtime
+dependencies, and offers `desktop` (`pywebview>=6,<7`), `test`, and `build`
+extras. `setup.py` is only a `setup()` compatibility shim; the unused
+`setuptools_scm` requirement was removed. Isolated `python -m build` produced
+both wheel and source distribution, and `twine check` passed for both. A clean
+wheel environment passed headless imports, module and console-script help, and
+reported `Requires-Python: >=3.12` / `License-Expression: MIT`. Monaco assets
+are intentionally not in the wheel; desktop launch reports the missing-assets
+diagnostic. M6 owns native/frontend artifact bundling.
+
+Real M2 `NetworkManager` + `ApplicationController` tests now cover independent
+persisted replicas joining, exchanging edits, closing, reopening, reconnecting,
+and continuing edits; and a restarted Bob reconciling Alice's offline insertion
+plus tombstone. They also cover writer failure status/recovery and graceful and
+terminated-owner Linux lock release. A disposable-profile GTK/pywebview launch
+was attempted with available X11/Wayland variables, but it timed out after GTK
+native-property warnings and could not support interactive assertions. Native
+M5 New/Resume, two-window restart, save-failure, and offline UI checks remain
+NOT EXECUTED.
+
+Verification at M5-D completion: `tests/test_m5_application_persistence.py` +
+`tests/test_m5_persisted_network_restart.py` passed 9 tests; the full Python
+suite passed 55 tests in 7.58 s.
+
+Current frontend audit (`npm audit --omit=dev`) reports two production findings:
+low-severity `monaco-editor` (the dependency path) and critical `dompurify
+<=3.4.16`, with five DOM-XSS advisories. npm proposes a forced Monaco 0.57 to
+0.56 downgrade; it was not applied because that is an unverified breaking
+change to the tested editor/worker path. The application remains trusted-LAN
+only and this dependency risk blocks a public-security claim.
+
+## M5-D status
+
+**PARTIAL.** Automated persistence and packaging evidence is complete, but G5
+cannot be called PASS without the outstanding native M5 lifecycle smoke tests.
+The app remains trusted-LAN only; the dependency audit and platform limitations
+must be considered before a public release.
+
+## M6 handoff
+
+M6 now packages the Vite/Monaco output into a PyInstaller onedir distribution
+while retaining JSON data outside application resources. See
+`docs/M6_RELEASE_TOOLING_REPORT.md` for frozen-resource and artifact evidence;
+native persistence UI verification remains a pre-G6/M7 requirement.

@@ -1,6 +1,7 @@
 # c2g — Code 2gether Incremental Implementation Plan
 
-**Status:** M0 complete; later milestones remain proposals and require approval.
+**Status:** M7 authorized and implemented for available validation; G6 PARTIAL.
+See `docs/M7_FINAL_VALIDATION_REPORT.md` for current evidence and acceptance gaps.
 **Basis:** the preserved P2PDocs 2.0 research and change-request records in
 `docs/MODERNIZATION_RESEARCH.md` and `docs/CHANGE_REQUEST.md`. c2g is derived
 from P2PDocs; historical source/archive references in those records are retained
@@ -121,7 +122,7 @@ flowchart LR
 
 ## M5 — Safe persistence + Python metadata hygiene
 
-**Complexity:** Medium. **Depends:** core state schema M1; UI join identity M2; may be developed ahead of M4 if valuable. **Gate:** G5. **Status (2026-10-24): PARTIAL.** M5-C integrates the validated JSON replica lifecycle into Monaco: explicit New/Resume selection, coalesced asynchronous autosave with completed-save status, process ownership locks, shutdown flush, and persisted post-join document identity. M5-D packaging and native/manual evidence remain.
+**Complexity:** Medium. **Depends:** core state schema M1; UI join identity M2; may be developed ahead of M4 if valuable. **Gate:** G5. **Status (2026-10-24): PARTIAL.** M5-D makes `pyproject.toml` canonical for Python 3.12+, builds/validates wheel and sdist, and adds real persisted two-peer restart/reconnect, writer-failure, and terminated-lock-owner coverage. Native M5 persistence evidence remains required; M6 owns frontend/native artifact bundling.
 **Expected changes:** `c2g/storage/persistence.py`, CRDT load/save boundaries, CLI/config, `pyproject.toml`, `setup.py`, tests and user docs.
 
 **Tasks:**
@@ -138,6 +139,11 @@ flowchart LR
 ## M6 — Release tooling and headless peer simulation
 
 **Complexity:** Medium. **Depends:** M4 + M5. **Gate:** pre-G6.
+**Status (2026-10-24): PARTIAL.** M6 adds PyInstaller onedir configuration,
+source/frozen frontend resolution, Linux artifact construction, headless
+three-peer simulation, Docker test definition, and Linux/Windows CI build
+configuration. Native frozen GUI, Windows execution, Docker execution, and
+physical-LAN evidence remain for M7.
 **Expected changes:** CI workflows, release/build scripts/spec files, `Dockerfile.tests`, `compose.test.yml` (optional), `.gitignore`, documentation, app icon assets if available.
 
 **Tasks:**
@@ -153,7 +159,11 @@ flowchart LR
 
 ## M7 — End-to-end validation and release decision
 
-**Complexity:** Medium. **Depends:** M6. **Gate:** G6 release.
+**Complexity:** Medium. **Depends:** M6. **Gate:** G6 release — **PARTIAL (2026-10-24)**.
+Authorized M7 checks and targeted stabilization are implemented. Full suite: 68
+passed; 100 seeded histories pass; Linux source/frozen native automation passes.
+Windows desktop, Docker, physical LAN, full human GUI checklist, and owner release
+approval remain outstanding. See `docs/M7_FINAL_VALIDATION_REPORT.md`.
 **Expected changes:** bug fixes strictly tied to failed verification, release docs and troubleshooting, `CONTEXT.md`, README accurate limitations; no unrelated new features.
 
 **Tasks:**
@@ -166,22 +176,21 @@ flowchart LR
 
 **Acceptance:** All required `OUT-*` and must-have CRs pass; no remaining P0 CRDT/network defect; runnable native artifacts and honest release documentation. **Done:** G6 signed-off by project owner; no automatic release before signoff.
 
-## Milestone status tracker (research snapshot)
+## Milestone status tracker (current validation evidence)
 
 | Milestone | Status | Last completed evidence | Next step |
 |---|---|---|---|
 | M0 | COMPLETE — G0 PASS | Six passing characterization tests; six strict expected failures; restored and aligned planning records | Await explicit authorization for M1 |
 | M1 | COMPLETE — G1 PASS | 22 passing CRDT tests, including 100 deterministic three-replica histories | Await explicit authorization for M2 |
-| M2 | NOT STARTED | Identified NET-F1..F10 | Wait for M1/G1 |
-| M3 | NOT STARTED | Official Monaco/pywebview API docs reviewed | Confirm supported OS targets before spike |
-| M4 | NOT STARTED | Proposed JS/Python contract | Wait for M1–M3 |
-| M5 | NOT STARTED | Unsafe pickle/start_fresh findings | Wait for model schema decision |
-| M6 | NOT STARTED | Native builds/Docker options researched | Wait for M4/M5 |
-| M7 | NOT STARTED | Gates/criteria defined | Wait for M6 |
+| M2 | PARTIAL | Protocol-v2 loopback/cycle/reconnect/caps pass | Physical-LAN acceptance |
+| M3 | PARTIAL | Linux Monaco/bridge/worker verified | Windows/WebView2 evidence |
+| M4 | PARTIAL | Production controller and Linux native automation pass | Complete human multi-window checklist |
+| M5 | PARTIAL | JSON persistence, recovery, locks and restart tests pass | Remaining native/platform acceptance |
+| M6 | PARTIAL | Current Linux onedir rebuilt and native-smoked | Windows desktop/Docker verification |
+| M7 | IMPLEMENTED — G6 PARTIAL | 68 tests, 100 seeds, Linux source/frozen automation; verified P0/P1 fixes | Human acceptance and explicit owner release approval |
 
-## Next precise Codex task after explicit approval
+## Next precise acceptance task
 
-> **Do not begin M2 without explicit approval.** M1 is complete. The next approved
-> task must be bounded to M2 and begin by reviewing the G1 evidence, these plans,
-> Graphify, and the network/CRDT boundary. Do not migrate the UI, install frontend
-> dependencies, or make M3+ changes as part of that work.
+Complete the human/platform steps in `docs/M7_FINAL_VALIDATION_REPORT.md`.
+Do not publish, commit, push, or claim G6 PASS without the necessary authorization
+and evidence. M7 is the final planned milestone; no later feature work is implied.

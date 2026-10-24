@@ -2,11 +2,11 @@
 
 ## Project identity and architecture
 
-Code 2gether (c2g) is a Python/Tkinter peer-to-peer collaborative text editor
-derived from the MIT-licensed P2PDocs project. The UI
-uses `CRDTDocument` for RGA-like character operations, `NetworkManager` for
-JSON-framed socket messages, and `PersistenceManager` for asynchronous pickle
-state storage beneath `~/.p2p_crdt/`.
+Code 2gether (c2g) is a Python/Monaco/pywebview peer-to-peer collaborative
+text editor derived from the MIT-licensed P2PDocs project. The production UI
+uses `CRDTDocument`, protocol-v2 `NetworkManager`, and JSON-backed `PersistedCrdt`
+with autosave beneath `~/.c2g`. Legacy Tk/pickle modules remain for historical
+compatibility; the production New/Resume path does not load them.
 
 ## Current milestone
 
@@ -46,6 +46,24 @@ New/Resume selection, coalesced autosave, per-replica process locks, persisted
 post-join document IDs, and final shutdown flush. See
 `docs/M5_PERSISTENCE_RECOVERY_REPORT.md`.
 
+M5-D makes `pyproject.toml` canonical for Python 3.12+, PEP 639 MIT metadata,
+and optional desktop/test/build dependencies. Wheel/sdist and clean-wheel
+headless/CLI verification pass. Persisted two-peer restart/reconnect,
+one-peer tombstone reconciliation, writer failure recovery, and abrupt
+lock-owner release have regression coverage. G5 remains PARTIAL because native
+M5 desktop persistence smoke checks were not executable; M6 owns frontend and
+native artifact bundling.
+
+M6 — Release Tooling and Headless Peer Simulation: **PARTIAL.** A PyInstaller
+onedir recipe bundles Vite/Monaco assets through source/frozen resolution; the
+Linux artifact contains the worker and passes a foreign-CWD CLI smoke. A real
+persisted three-peer chain/cycle/reconnect simulation, Docker test definition,
+and Linux/Windows CI build configuration are present. Native frozen GUI,
+Windows CI execution, Docker execution, and physical-LAN discovery remain
+unverified or blocked. DOMPurify 3.4.17 is explicitly substituted for Monaco's
+embedded 3.4.15 sanitizer in the Vite bundle; see
+`docs/M6_RELEASE_TOOLING_REPORT.md`.
+
 ## Development environment
 
 - Ubuntu 24.04-derived Linux kernel 7.0.0-38-generic, x86_64.
@@ -59,14 +77,14 @@ post-join document IDs, and final shutdown flush. See
   configured c2g remote is
   `git@github.com:sultanshahdev/c2g.git`; migration changes remain local until
   reviewed and committed.
-- Proposed future Python baseline: 3.12+, pending a future packaging decision;
-  the current `>=3.7` declaration remains unchanged.
+- Supported Python baseline is 3.12+; package metadata is canonical in
+  `pyproject.toml` and `setup.py` is a compatibility shim.
 
 ## Test baseline
 
 Run `./.venv/bin/python -m pytest -q` (or
-`python -m pytest -q` with the virtual environment activated). M3 verification
-result: **46 passed**. Fixtures replace `PersistenceManager` in the document module
+`python -m pytest -q` with the virtual environment activated). M6 verification
+result: **61 passed**. Fixtures replace `PersistenceManager` in the document module
 with an in-memory double, so tests create no persistence workers or user-state
 files. The historical six regressions are now normal passing tests.
 
@@ -114,5 +132,94 @@ The historical `~/.p2p_crdt/` path and message names are deliberately
 unchanged; path/data migration is deferred to M5 and negotiated protocol
 versioning to M2. The new M1 snapshot tombstone marker is documented but not
 yet negotiated with legacy peers. G2 still needs its manual Tk/LAN smoke; G3
-still needs Windows/WebView2 and automated native selection evidence. **M4
-remains unstarted and requires explicit authorization.**
+still needs Windows/WebView2 and automated native selection evidence. **M7 is now explicitly authorized; current gate and acceptance gaps are recorded below.**
+
+## Startup picker correction (2026-10-24; scoped maintenance, no M7)
+
+Confirmed the startup overlay bug: `#picker { display:grid }` overrides the
+browser's default hidden styling. Added an important `[hidden]` display rule.
+Also moved remote-patch callback installation outside the startup ready handler,
+so the picker branch's early return cannot leave incoming peer patches without
+an installed handler after New/Resume. No Python runtime/packaging changes.
+
+Added `tests/test_picker_visibility.py`, using existing pytest plus an installed
+Chrome/Chromium (skips when unavailable), to check computed display for initial
+hidden, selection-visible, and selection-completed states against actual HTML
+and CSS. It fails before the CSS correction and passes afterward.
+`npm run build` passes (large-chunk warning). Full pytest: **61 passed, 1 failed**;
+`test_picker_lists_documents_and_rejects_bad_key` uses default port 5000, already
+occupied by another Python process (PID 11029); isolated rerun confirms failure.
+The existing process was left untouched. Graphify was refreshed.
+
+Automated source-run native GTK/pywebview smoke with isolated temporary storage
+passed normal empty startup + New, existing-document Resume, and forced-new
+startup. Checked computed picker display, editor/sidebar hit-testing, Monaco
+focus and DOM text insertion reaching the real Python controller, and remote
+patch callback availability. Physical keyboard/mouse interaction and live
+multi-peer GUI verification remain pending; automated persistence/network
+coverage passed in the suite. Native smoke emitted pywebview introspection
+warnings for GTK native widget properties but completed all assertions.
+The existing frozen executable still needs rebuilding to include these frontend
+changes; no PyInstaller rebuild, commit, push, or M7 work was performed.
+
+## Picker test isolation (2026-10-24)
+
+The port-dependent failure was in
+`tests/test_m5_application_persistence.py::test_picker_lists_documents_and_rejects_bad_key`,
+not the CSS regression in `tests/test_picker_visibility.py`. The failing test now
+uses `listen_port=0` for both application instances and `try/finally` shutdown;
+its document-listing and invalid-key assertions are unchanged. Production code
+was not modified. Focused picker tests: **2 passed**. Full pytest: **62 passed**,
+superseding the occupied-port failure above. Graphify refreshed; no PyInstaller
+rebuild or M7 work.
+
+
+## M7 final validation (2026-10-24)
+
+**Available implementation/validation DONE; G6 PARTIAL.** Final planned milestone
+was explicitly authorized. See `docs/M7_FINAL_VALIDATION_REPORT.md` for all
+results, exact acceptance steps, support matrix, and limitations. No known
+unresolved demonstrated P0/P1 remains from executed checks; final release still
+requires explicit owner approval.
+
+Baseline reverified: 62 passed; the old port-dependent picker test already uses
+port 0. Two recovery tests leaked non-daemon writers after printing results;
+context-managed cleanup now allows pytest to exit. M7 final full suite: **68 passed
+in 12.22 s**, with normal exit. Existing 100 seeds (0–99), three replicas × 30 edits, passed in
+2.83 s. Frontend build passed; production npm audit has zero vulnerabilities.
+
+Verified and fixed with failing-before/passing-after regressions:
+- P0: save after corrupt-primary backup recovery could destroy the valid backup
+  if final replace failed. Validate the primary before rotating it over backup.
+- P1: three-peer rejoin snapshots/tombstones were not relayed to the connected
+  neighbor. Forward nonempty snapshots through the existing deduplicated OP path.
+- P1: cyclic resume rejected after starting a writer/acquiring ownership. Validate
+  ancestry before acquiring those resources.
+
+Changed in M7: `c2g/network/manager.py`, `c2g/storage/json_store.py`,
+`c2g/storage/recovered_document.py`, `tests/test_crdt_recovery_m5.py`,
+`tests/test_json_store_m5.py`, new `tests/test_m7_release_validation.py`, new
+`scripts/validate_desktop.py`, new `docs/M7_FINAL_VALIDATION_REPORT.md`, README,
+this context, and implementation plan. All earlier dirty work was preserved.
+
+Native GTK/X11 source picker/New/Resume/forced-new, synthetic keyboard typing,
+selection/delete/undo/redo, Unicode DOM insertion, real Saved locally/error DOM
+status, UTF-8 controller export, and sidebar checks pass. Frozen native Xvfb
+pointer/keyboard New+Resume, final-flush text and clean exit pass from `/tmp`.
+The owner separately reports manual application success. Neither automated
+input nor that general report proves the full physical acceptance checklist.
+
+Exactly one final Linux onedir rebuild includes the M7 Python fixes. Executable
+SHA-256: dc4c1f1e6c4c24507586f6ae8ea70132a0379d92572255bdcb1121bec73d36fb.
+Checksum and foreign-CWD help pass; picker CSS fix, editor worker, and DOMPurify
+3.4.17 are bundled. Correction to earlier reports: pywebview starts a loopback
+asset server even with http_server=False. Runtime verifies 127.0.0.1 binding,
+web/dist root, and rejected parent traversal; no document root is served.
+
+Windows desktop build: NOT VERIFIED (inspected remote successful run contains
+only pytest). Docker: NOT EXECUTED (daemon permission denied). Physical LAN:
+NOT VERIFIED. Remaining human work: final artifact's full native dialog/clipboard
+and multi-window checks, two-machine discovery, actual Windows build/WebView2,
+Docker run, owner acceptance. Trusted-LAN-only, unauthenticated/unencrypted P2P;
+no public-Internet safety claim. No commit, push, release publication, or PyPI
+publication. Graphify refreshed once at completion.

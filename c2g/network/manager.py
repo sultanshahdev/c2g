@@ -195,7 +195,14 @@ class NetworkManager:
         typ = frame.get("type")
         if typ == "FULL_SYNC":
             if frame.get("document_id") != self.document_id or not isinstance(frame.get("state"), list): raise ProtocolError("invalid sync")
-            self._deliver(CRDTMessage(msg_type="FULL_SYNC", elements=frame["state"]), session.peer_id); return
+            message = CRDTMessage(msg_type="FULL_SYNC", elements=frame["state"])
+            self._deliver(message, session.peer_id)
+            # Rejoin state must also reach neighbors that stayed connected.
+            # Relay once as a normal OP so cycles use the existing message-ID
+            # deduplication. Empty snapshots contain no records to propagate.
+            if message.elements:
+                self.broadcast_message(message, exclude_peer=session.peer_id)
+            return
         if typ != "OP" or frame.get("document_id") != self.document_id: raise ProtocolError("invalid application frame")
         mid, raw = frame.get("message_id"), frame.get("message")
         if not isinstance(mid, str) or not mid or len(mid) > 256 or not isinstance(raw, dict): raise ProtocolError("invalid operation")

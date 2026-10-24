@@ -30,6 +30,7 @@ MANIFEST
 # PyInstaller
 *.manifest
 *.spec
+!c2g.spec
 
 # Installer logs
 pip-log.txt

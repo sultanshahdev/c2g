@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  pytest:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +19,61 @@ jobs:
         run: python -m pip install -e '.[test]'
       - name: Run tests
         run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build local Monaco frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+  desktop-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Install desktop build dependencies
+        run: python -m pip install -e '.[desktop-build]'
+      - name: Build onedir distribution
+        run: python scripts/build_desktop.py
+      - name: Verify packaged frontend and checksum (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          test -f dist/c2g/c2g
+          test -f dist/c2g/_internal/web/dist/index.html
+          test -n "$(find dist/c2g/_internal/web/dist -type f -name '*worker*.js' -print -quit)"
+          test -f dist/c2g/SHA256SUMS.txt
+          cd dist/c2g && sha256sum -c SHA256SUMS.txt
+      - name: Verify packaged frontend and checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $application = 'dist/c2g/c2g.exe'
+          $manifest = 'dist/c2g/SHA256SUMS.txt'
+          if (!(Test-Path $application) -or !(Test-Path 'dist/c2g/_internal/web/dist/index.html') -or !(Test-Path $manifest) -or !(Get-ChildItem 'dist/c2g/_internal/web/dist' -Recurse -Filter '*worker*.js' | Select-Object -First 1)) { throw 'Packaged desktop resources are missing' }
+          $expected = (Get-Content $manifest).Split()[0]
+          if ((Get-FileHash $application -Algorithm SHA256).Hash.ToLower() -ne $expected.ToLower()) { throw 'SHA256 checksum mismatch' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c2g-${{ runner.os }}-onedir
+          path: dist/c2g
+          if-no-files-found: error

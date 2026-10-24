@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+
+WORKDIR /workspace
+COPY . .
+RUN python -m pip install --no-cache-dir -e '.[test]'
+
+# Headless loopback protocol/persistence verification only; no GUI or LAN discovery claim.
+CMD ["python", "-m", "pytest", "-q", "tests/test_m6_headless_peers.py", "tests/test_m5_persisted_network_restart.py", "tests/test_network_m2.py"]

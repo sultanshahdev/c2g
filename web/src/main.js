@@ -31,8 +31,8 @@ window.addEventListener('pywebviewready', async () => {
   if(initial.picker){ showPicker(initial.picker); return; }
   if(!initial.accepted && initial.reason){ status(initial.reason); return; }
   activate(initial);
-  window.c2gApplyRemotePatch = payload => { applyPatch(payload.patch); pythonVersion = payload.version; status('Remote patch applied'); };
 });
+window.c2gApplyRemotePatch = payload => { applyPatch(payload.patch); pythonVersion = payload.version; status('Remote patch applied'); };
 window.c2gReceive=payload=>{if(payload.type==='remote_patch')window.c2gApplyRemotePatch(payload);else if(payload.type==='network'){renderPeers(payload.ui_state);status(payload.kind.replaceAll('_',' '));}else if(payload.type==='save_status')saveStatus(payload.state,payload.error);};
 document.querySelector('#connect-form').addEventListener('submit',async event=>{event.preventDefault();const result=await window.pywebview.api.connect(document.querySelector('#endpoint').value);status(result.accepted?(result.status||'Connecting'):result.reason);});
 document.querySelector('#save').onclick=async()=>{const result=await window.pywebview.api.export_document();status(result.accepted?`Exported ${result.path}`:`Export failed: ${result.reason}`);};

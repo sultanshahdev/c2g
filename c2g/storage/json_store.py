@@ -80,9 +80,14 @@ class JsonDocumentStore:
             with os.fdopen(fd, "wb") as handle:
                 handle.write(payload); handle.flush(); os.fsync(handle.fileno())
             if self.state_path.exists():
-                # Existing primary was previously accepted by save/load; retain it
-                # as recovery material before replacing it.
-                os.replace(self.state_path, self.backup_path)
+                # A recovered document may still have a corrupt primary. Never
+                # rotate that over the last valid backup before committing.
+                try:
+                    self._read(self.state_path)
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError, StateValidationError):
+                    pass
+                else:
+                    os.replace(self.state_path, self.backup_path)
             os.replace(temp_path, self.state_path)
             try:
                 directory_fd = os.open(self.directory, os.O_RDONLY)

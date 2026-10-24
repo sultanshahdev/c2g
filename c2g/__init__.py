@@ -12,7 +12,6 @@ __license__ = "MIT"
 from .crdt import CRDTDocument, CRDTMessage, CRDTElement, CRDTId
 from .network import NetworkManager, PeerDiscovery
 from .storage import PersistenceManager
-from .ui import P2PEditor
 
 __all__ = [
     'CRDTDocument',
@@ -24,3 +23,11 @@ __all__ = [
     'PersistenceManager',
     'P2PEditor',
 ]
+
+
+def __getattr__(name):
+    """The legacy Tk editor is intentionally not imported by headless users."""
+    if name == "P2PEditor":
+        from .ui import P2PEditor
+        return P2PEditor
+    raise AttributeError(name)

@@ -1,44 +1,46 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "c2g"
 version = "0.1.0"
-description = "Code 2gether — peer-to-peer collaborative text editor using CRDT"
+description = "Code 2gether — local-first peer-to-peer collaborative text editor"
 readme = "README.md"
-requires-python = ">=3.7"
-license = {text = "MIT"}
-authors = [{name = "c2g Contributors"}]
-keywords = ["p2p", "crdt", "collaborative", "editor", "text-editor", "peer-to-peer", "conflict-free"]
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "c2g Contributors (derived from P2PDocs)"}]
+keywords = ["p2p", "crdt", "collaborative", "editor", "peer-to-peer"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
-    "Topic :: Communications",
-    "Topic :: Text Editors",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Editors",
 ]
+dependencies = []
 
 [project.urls]
+Homepage = "https://github.com/sultanshahdev/c2g"
 Source = "https://github.com/sultanshahdev/c2g"
+"Original project" = "https://github.com/taaha-0548/P2PDocs"
 
 [project.scripts]
 c2g = "c2g.cli:main"
 
 [project.optional-dependencies]
+desktop = ["pywebview>=6,<7"]
 test = ["pytest>=7,<9"]
+build = ["build>=1.2", "twine>=5"]
+desktop-build = ["pyinstaller>=6,<7", "pywebview>=6,<7"]
+
+[tool.setuptools.packages.find]
+include = ["c2g*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-
-[tool.setuptools]
-packages = ["c2g", "c2g.crdt", "c2g.network", "c2g.storage", "c2g.ui"]

@@ -9,6 +9,7 @@ from .bridge import DesktopBridge
 from .controller import ApplicationController
 from ..storage.json_store import JsonDocumentStore, StateValidationError
 from ..storage.recovered_document import PersistedCrdt
+from .resources import frontend_index
 
 
 class DesktopApplication:
@@ -65,10 +66,7 @@ class DesktopApplication:
         self.peer = peer
 
     def run(self) -> None:
-        root = Path(__file__).resolve().parents[2]
-        index = root / "web" / "dist" / "index.html"
-        if not index.exists():
-            raise RuntimeError("Monaco frontend build is missing; run: cd web && npm ci && npm run build")
+        index = frontend_index()
         try:
             import webview
         except ImportError as exc:
@@ -78,7 +76,7 @@ class DesktopApplication:
         bridge.attach_window(window)
         window.events.closed += self.shutdown
         try:
-            webview.start(debug=False, http_server=False)
+            webview.start(debug=True, http_server=False)
         finally:
             self.shutdown()
 

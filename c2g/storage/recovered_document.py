@@ -39,11 +39,13 @@ class PersistedCrdt:
     def open(cls, root, storage_key, status_callback=None):
         store = JsonDocumentStore(root, storage_key); state = store.load()
         if state is None: raise FileNotFoundError("saved document does not exist")
-        item = cls(store, state["document_id"], state["replica_id"], state["document_name"], status_callback)
-        doc = item.document
         elements = [CRDTElement.from_dict(raw) for raw in state["elements"]]
         records = {element.char_id: element for element in elements}
-        if len(records) != len(elements) or doc._has_predecessor_cycle(records): raise StateValidationError("invalid CRDT ancestry")
+        # Reject invalid ancestry before acquiring ownership or starting a writer.
+        if len(records) != len(elements) or CRDTDocument._has_predecessor_cycle(records):
+            raise StateValidationError("invalid CRDT ancestry")
+        item = cls(store, state["document_id"], state["replica_id"], state["document_name"], status_callback)
+        doc = item.document
         with doc.lock:
             doc.elements = OrderedDict((element.char_id, element) for element in elements)
             doc.pending_deletes = {CRDTId(**raw) for raw in state["pending_deletes"]}

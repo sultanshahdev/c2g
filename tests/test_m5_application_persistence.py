@@ -61,6 +61,37 @@ def test_linux_cross_process_lock_contention(tmp_path):
     reopened = PersistedCrdt.open(tmp_path, "shared"); reopened.close()
 
 
+def test_lock_releases_after_terminated_owner(tmp_path):
+    saved = PersistedCrdt.create(tmp_path, "abrupt"); saved.close()
+    code = ("import sys,time; from c2g.storage.recovered_document import PersistedCrdt; "
+            "d=PersistedCrdt.open(sys.argv[1], 'abrupt'); print('locked', flush=True); time.sleep(30)")
+    child = subprocess.Popen([sys.executable, "-c", code, str(tmp_path)], stdout=subprocess.PIPE, text=True)
+    try:
+        assert child.stdout.readline().strip() == "locked"
+        with pytest.raises(DocumentInUseError): PersistedCrdt.open(tmp_path, "abrupt")
+        child.terminate(); child.wait(timeout=3)
+        reopened = PersistedCrdt.open(tmp_path, "abrupt"); reopened.close()
+    finally:
+        if child.poll() is None:
+            child.kill(); child.wait(timeout=3)
+
+
+def test_autosave_failure_is_reported_and_newer_snapshot_recovers(tmp_path):
+    statuses = []
+    saved = PersistedCrdt.create(tmp_path, "failure", status_callback=lambda state, error: statuses.append((state, error)))
+    original_save = saved.store.save
+    saved._autosave._save = lambda _state: (_ for _ in ()).throw(OSError("injected write failure"))
+    saved.document.insert_local("x", 0)
+    wait_for(lambda: any(state == "failed" for state, _ in statuses))
+    with pytest.raises(OSError, match="injected write failure"):
+        saved.flush()
+    assert any(state == "failed" and "injected" in error for state, error in statuses)
+    saved._autosave._save = original_save
+    saved.save(); saved.flush()
+    assert saved.store.load()["elements"][0]["char"] == "x"
+    saved.close()
+
+
 def test_joined_document_identity_survives_restart(tmp_path):
     alice_saved = PersistedCrdt.create(tmp_path, "alice")
     alice_document_id = alice_saved.document_id
@@ -80,9 +111,14 @@ def test_joined_document_identity_survives_restart(tmp_path):
 
 
 def test_picker_lists_documents_and_rejects_bad_key(tmp_path):
-    app = DesktopApplication("alice", storage_root=tmp_path)
-    assert app.create_document("Notes")["accepted"]
-    app.shutdown()
+    app = DesktopApplication("alice", listen_port=0, storage_root=tmp_path)
+    try:
+        assert app.create_document("Notes")["accepted"]
+    finally:
+        app.shutdown()
     assert app.recent_documents()[0]["name"] == "Notes"
-    another = DesktopApplication("alice", storage_root=tmp_path)
-    assert not another.resume_document("../bad")["accepted"]
+    another = DesktopApplication("alice", listen_port=0, storage_root=tmp_path)
+    try:
+        assert not another.resume_document("../bad")["accepted"]
+    finally:
+        another.shutdown()

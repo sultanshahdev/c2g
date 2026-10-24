@@ -44,3 +44,47 @@ def test_both_corrupt_states_fail_without_overwriting(tmp_path):
     store.backup_path.write_text("{}", encoding="utf-8")
     with pytest.raises(StateValidationError): store.load()
     assert store.state_path.read_bytes() == b"\xff"
+
+
+def test_failed_save_after_backup_recovery_preserves_valid_backup(tmp_path, monkeypatch):
+    import os
+    store = JsonDocumentStore(tmp_path, 'recovered')
+    old = state()
+    store.save(old); store.save(old)
+    store.state_path.write_text('{corrupt', encoding='utf-8')
+    assert store.load() == old
+    replace = os.replace
+    def fail_primary(source, target):
+        if Path(target) == store.state_path:
+            raise OSError('injected final replace failure')
+        return replace(source, target)
+    monkeypatch.setattr(os, 'replace', fail_primary)
+    with pytest.raises(OSError, match='injected'):
+        store.save(old)
+    assert store.load() == old
+
+
+def test_cyclic_resume_rejects_without_leaking_writer_or_lock(tmp_path):
+    import subprocess
+    import sys
+    store = JsonDocumentStore(tmp_path, 'cycle')
+    value = state()
+    value['elements'][0]['after_id'] = value['elements'][1]['char_id']
+    store.save(value)
+    code = '''
+import sys
+from c2g.storage.recovered_document import PersistedCrdt
+from c2g.storage.json_store import StateValidationError
+from c2g.storage.lifecycle import DocumentLock
+try:
+    PersistedCrdt.open(sys.argv[1], 'cycle')
+except StateValidationError:
+    pass
+else:
+    raise AssertionError('cyclic state was accepted')
+lock = DocumentLock(__import__('pathlib').Path(sys.argv[1]) / 'documents' / 'cycle')
+lock.close()
+'''
+    result = subprocess.run([sys.executable, '-c', code, str(tmp_path)],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr

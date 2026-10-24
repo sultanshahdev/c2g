@@ -1,0 +1,12 @@
+.git
+.venv
+build
+dist
+web/node_modules
+web/dist
+graphify-out
+.pytest_cache
+__pycache__
+*.pyc
+.c2g
+.p2p_crdt
