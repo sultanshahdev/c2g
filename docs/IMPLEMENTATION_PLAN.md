@@ -117,7 +117,7 @@ flowchart LR
 5. Implement defined undo/redo behavior (or gate/disable until collaborative semantics pass); verify selections, paste, mouse edits, multi-cursor and Unicode.
 6. Keep all JS/CSS/worker assets local and maintain the offline test; never run a remotely reachable UI HTTP server.
 
-**Acceptance:** Real native c2g window with working Monaco on Windows/Linux; 2/3-peer editing feature parity; all UI-01..07 and associated NET tests pass; no hidden TODO preventing declared features. **Done:** G4 screenshot/manual checklist plus bridge test logs.
+**Acceptance:** Real native c2g window with working Monaco on Windows/Linux; 2/3-peer editing feature parity; all UI-01..07 and associated NET tests pass; no hidden TODO preventing declared features. **Status (2026-10-24): PARTIAL.** Production controller/bridge/default Monaco CLI and two-peer loopback editing are implemented; native multi-window, three-peer, cursor, and Windows evidence remain required. See `M4_DESKTOP_INTEGRATION_REPORT.md`.
 
 ## M5 — Safe persistence + Python metadata hygiene
 

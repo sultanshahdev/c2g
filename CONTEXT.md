@@ -29,7 +29,15 @@ pywebview 6.2.1 with GTK launches a native Linux Monaco window; its local
 worker and JavaScript/Python bridge paths were smoke-tested. A narrow CRDT
 insertion batch makes the 10,003-code-point paste pass. G3 remains partial
 because Windows/WebView2 and automated native cursor/selection evidence are
-unverified. See `docs/M3_MONACO_FEASIBILITY_REPORT.md`. M4 remains unstarted.
+unverified. See `docs/M3_MONACO_FEASIBILITY_REPORT.md`. M4 — Production Monaco
+desktop integration: **PARTIAL**. The default CLI now starts the pywebview
+Monaco host, with one serialized controller using the existing M1 CRDT and M2
+network manager; focused real-loopback two-peer editing passes. Native
+multi-window, three-peer UI, cursor assertions, and Windows evidence remain
+outstanding. See `docs/M4_DESKTOP_INTEGRATION_REPORT.md`.
+M4 also includes an explicit Disconnect Peer control backed by M2's guarded
+session cleanup; automated loopback tests cover disconnect, independent offline
+edits including tombstones, and explicit reconnect convergence.
 
 ## Development environment
 
@@ -51,7 +59,7 @@ unverified. See `docs/M3_MONACO_FEASIBILITY_REPORT.md`. M4 remains unstarted.
 
 Run `./.venv/bin/python -m pytest -q` (or
 `python -m pytest -q` with the virtual environment activated). M3 verification
-result: **36 passed**. Fixtures replace `PersistenceManager` in the document module
+result: **40 passed**. Fixtures replace `PersistenceManager` in the document module
 with an in-memory double, so tests create no persistence workers or user-state
 files. The historical six regressions are now normal passing tests.
 

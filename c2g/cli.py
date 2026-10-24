@@ -20,14 +20,16 @@ def main():
     """Main entry point for CLI."""
     username, peer_ip, listen_port = parse_args()
     
-    from .ui import P2PEditor
+    from .ui import DesktopApplication
     
     print(f"Starting c2g — Code 2gether for user: {username}")
     if peer_ip:
         print(f"Connecting to peer: {peer_ip}")
     
-    editor = P2PEditor(username, peer_ip, listen_port)
-    editor.run()
+    try:
+        DesktopApplication(username, peer_ip, listen_port).run()
+    except RuntimeError as exc:
+        raise SystemExit(f"c2g could not start the Monaco desktop editor: {exc}") from exc
 
 
 if __name__ == "__main__":

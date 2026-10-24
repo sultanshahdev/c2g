@@ -207,16 +207,25 @@ class NetworkManager:
         if not session or session.state != "READY": return False
         try: self._send(session, {"type":"OP", "document_id":self.document_id, "message_id":msg.message_id or f"{self.peer_id}:{uuid.uuid4()}", "message":msg.to_dict()}); return True
         except OSError: self._drop(peer_id, session); return False
+    def disconnect_peer(self, peer_id):
+        """Close one direct session without affecting the listener or peers."""
+        if not isinstance(peer_id, str) or not peer_id:
+            return False
+        with self.peers_lock:
+            session = self.peers.get(peer_id)
+        # _drop retains the expected-session guard and closes outside peers_lock.
+        return self._drop(peer_id, session) if session else False
     def _drop(self, peer_id, expected=None):
         with self.peers_lock:
             session = self.peers.get(peer_id)
-            if not session or (expected and expected is not session): return
+            if not session or (expected and expected is not session): return False
             self.peers.pop(peer_id, None)
         try: session.conn.shutdown(socket.SHUT_RDWR)
         except OSError: pass
         try: session.conn.close()
         except OSError: pass
         self._event("peer_disconnected", peer_id=peer_id)
+        return True
     def close(self):
         self.running = False
         if self.server_socket:
