@@ -101,7 +101,7 @@ flowchart LR
 6. Test offline and frozen resource resolution assumptions; record startup timings and artifact footprint as measurements **only when run**.
 7. If pywebview fails support/worker/renderer gate, try Qt WebEngine with the exact same Python bridge interface; provide evidence and choose one.
 
-**Acceptance:** Runs without internet on both intended desktop platforms; all workers initialize; 10k paste and remote insert/delete keep editor/model equivalent; no feedback loops, cursor/selection stable; undo behavior explicitly scoped; choose A or B with measured tradeoffs. **Done:** G3 records browser/OS/renderer versions and exit decision.
+**Acceptance:** Runs without internet on both intended desktop platforms; all workers initialize; 10k paste and remote insert/delete keep editor/model equivalent; no feedback loops, cursor/selection stable; undo behavior explicitly scoped; choose A or B with measured tradeoffs. **Status (2026-10-23): PARTIAL.** Monaco/Vite production assets and a headless CRDT bridge are present, but pywebview/native renderer and 10k transaction runtime remain unverified; see `M3_MONACO_FEASIBILITY_REPORT.md`. M4 is not started.
 
 ## M4 — Production editor integration and familiar desktop UX
 

@@ -24,7 +24,12 @@ network/discovery events via a main-thread queue and lists discovered endpoints
 with explicit Connect actions. `tests/test_network_m2.py` has eight loopback /
 headless tests; the full suite reports **30 passed**. G2 remains PARTIAL solely
 because manual two-instance Tk/LAN discovery verification was not executable
-in this environment. M3 remains unstarted.
+in this environment. M3 — Monaco + pywebview feasibility spike: **PARTIAL**.
+pywebview 6.2.1 with GTK launches a native Linux Monaco window; its local
+worker and JavaScript/Python bridge paths were smoke-tested. A narrow CRDT
+insertion batch makes the 10,003-code-point paste pass. G3 remains partial
+because Windows/WebView2 and automated native cursor/selection evidence are
+unverified. See `docs/M3_MONACO_FEASIBILITY_REPORT.md`. M4 remains unstarted.
 
 ## Development environment
 
@@ -45,8 +50,8 @@ in this environment. M3 remains unstarted.
 ## Test baseline
 
 Run `./.venv/bin/python -m pytest -q` (or
-`python -m pytest -q` with the virtual environment activated). M0 final result:
-**22 passed**. Fixtures replace `PersistenceManager` in the document module
+`python -m pytest -q` with the virtual environment activated). M3 verification
+result: **36 passed**. Fixtures replace `PersistenceManager` in the document module
 with an in-memory double, so tests create no persistence workers or user-state
 files. The historical six regressions are now normal passing tests.
 
@@ -93,5 +98,6 @@ Graphify also generated ignored local artifacts in `graphify-out/` and `.codex/`
 The historical `~/.p2p_crdt/` path and message names are deliberately
 unchanged; path/data migration is deferred to M5 and negotiated protocol
 versioning to M2. The new M1 snapshot tombstone marker is documented but not
-yet negotiated with legacy peers. Next action: **M2 — Peer Synchronization
-Reliability, awaiting explicit authorization.**
+yet negotiated with legacy peers. G2 still needs its manual Tk/LAN smoke; G3
+still needs Windows/WebView2 and automated native selection evidence. **M4
+remains unstarted and requires explicit authorization.**

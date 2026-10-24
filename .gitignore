@@ -142,3 +142,7 @@ dmypy.json
 # Local Graphify index (regenerated from source)
 graphify-out/
 .codex/
+
+# M3 frontend dependencies and generated production assets
+web/node_modules/
+web/dist/

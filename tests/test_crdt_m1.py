@@ -116,6 +116,26 @@ def test_unicode_code_point_indexing(document_factory):
     assert document.get_text() == "A😀ée\u0301\n"
 
 
+def test_local_batch_preserves_sequential_gap_anchors(document_factory):
+    sequential, batched = document_factory("sequential"), document_factory("batched")
+    for document in (sequential, batched):
+        document.insert_local("A", 0)
+        document.insert_local("B", 1)
+    for offset, char in enumerate("😀X\n"):
+        sequential.insert_local(char, 1 + offset)
+    batched.insert_local_batch("😀X\n", 1)
+
+    def shape(document):
+        return [
+            (element.char, element.after_id.lamport_clock if element.after_id else None,
+             element.before_id.lamport_clock if element.before_id else None)
+            for element in document._get_sorted_visible_elements()
+        ]
+
+    assert sequential.get_text() == batched.get_text() == "A😀X\nB"
+    assert shape(sequential) == shape(batched)
+
+
 def test_restore_clock_and_pending_delete(monkeypatch):
     states = {}
 

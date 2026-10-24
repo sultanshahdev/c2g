@@ -247,6 +247,38 @@ class CRDTDocument:
             self._persist_state()
             return element
 
+    def insert_local_batch(self, text: str, position: int) -> List[CRDTElement]:
+        """Insert consecutive local code points into one existing visual gap.
+
+        This has the same immutable anchors as calling ``insert_local`` for
+        every character at consecutive positions, but resolves the gap and
+        persists only once.  It deliberately retains one CRDT element and
+        Lamport tick per code point, preserving the M1 wire/state model.
+        """
+        with self.lock:
+            if not isinstance(text, str):
+                raise ValueError("local batch insertion requires text")
+            if not text:
+                return []
+            visible = self._get_sorted_visible_elements()
+            position = max(0, min(position, len(visible)))
+            after_id = visible[position - 1].char_id if position else None
+            before_id = visible[position].char_id if position < len(visible) else None
+            inserted = []
+            self._ensure_safe_clock()
+            for char in text:
+                # The document lock keeps this local run contiguous; after the
+                # single safety scan above, each newly assigned ID advances the
+                # maximum for this client.
+                self.lamport_clock += 1
+                element = CRDTElement(CRDTId(self.client_id, self.lamport_clock), char, after_id, True, before_id)
+                self.elements[element.char_id] = element
+                self._index_resolution(element)
+                inserted.append(element)
+                after_id = element.char_id
+            self._persist_state()
+            return inserted
+
     def insert_remote(self, element: CRDTElement) -> bool:
         """Accept an insertion record; true means a new/changed record was accepted."""
         with self.lock:
